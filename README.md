@@ -47,6 +47,8 @@ Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+
 
 ## 作者配置
 
+完整字段说明、默认值和安装记录解释见[配置文件文档](docs/configuration.md)。
+
 首次启动自动生成 `ModpackUpdate/config/config.json`，默认关闭更新。
 
 ```json
@@ -102,6 +104,7 @@ Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+
 
 ## 发布和验收
 
+- [配置文件说明](docs/configuration.md)
 - [发布协议](docs/publishing-protocol.md)
 - [打包和派生产物流程](docs/packaging.md)
 
