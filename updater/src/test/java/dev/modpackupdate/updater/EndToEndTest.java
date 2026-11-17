@@ -148,6 +148,7 @@ class EndToEndTest {
         private static void dismiss(Container container) {
             for (Component component : container.getComponents()) {
                 if (component instanceof JOptionPane pane) pane.setValue(JOptionPane.OK_OPTION);
+                else if (component instanceof javax.swing.JButton button && "关闭".equals(button.getText())) button.doClick();
                 else if (component instanceof Container child) dismiss(child);
             }
         }

@@ -21,6 +21,68 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class UiTest {
+    @Test void confirmationProgressAndCompletionWork() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        UpdateUi ui = new UpdateUi();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Models.Installed installed = new Models.Installed();
+            installed.version = "1.4.0";
+            Models.Release release = new Models.Release(1, "adventure", 2, "1.5.0",
+                    "更新内容\n\n• 更新部分模组\n• 优化启动速度\n• 修复配置冲突", null, null, null);
+            var confirmation = executor.submit(() -> ui.confirm(installed, release));
+            Window confirm = awaitDialog("发现更新");
+            SwingUtilities.invokeAndWait(() -> { capture(confirm, "confirmation.png"); click(confirm, "跳过并继续游戏"); });
+            assertFalse(confirmation.get(5, TimeUnit.SECONDS));
+            ui.progress(UpdateUi.Stage.DOWNLOAD, "正在下载 · mods/example-adventure-1.5.0.jar", 3, 8);
+            SwingUtilities.invokeAndWait(() -> {
+                JFrame frame = java.util.Arrays.stream(Window.getWindows()).filter(Window::isShowing)
+                        .filter(JFrame.class::isInstance).map(JFrame.class::cast).findFirst().orElseThrow();
+                JProgressBar bar = find(frame, JProgressBar.class).get(0);
+                assertFalse(bar.isIndeterminate());
+                assertEquals(3, bar.getValue());
+                assertEquals(8, bar.getMaximum());
+                capture(frame, "progress.png");
+            });
+            ui.progress(UpdateUi.Stage.INSTALL, "安装文件并保存版本记录…", 0, 0);
+            var completion = executor.submit(() -> { ui.message("已更新至 1.5.0。\n保留本地差异 2 项。\n请从启动器重新启动游戏。", false); return null; });
+            Window done = awaitDialog("更新完成");
+            SwingUtilities.invokeAndWait(() -> { capture(done, "completion.png"); click(done, "关闭"); });
+            completion.get(5, TimeUnit.SECONDS);
+        } finally {
+            ui.close();
+            SwingUtilities.invokeAndWait(() -> { for (Window window : Window.getWindows()) window.dispose(); });
+            executor.shutdownNow();
+        }
+    }
+
+    private static Window awaitDialog(String title) throws Exception {
+        Window[] result = {null};
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (result[0] == null && System.nanoTime() < deadline) {
+            SwingUtilities.invokeAndWait(() -> {
+                for (Window window : Window.getWindows()) {
+                    if (window instanceof JDialog dialog && dialog.isShowing() && dialog.getTitle().endsWith(title)) result[0] = dialog;
+                }
+            });
+            if (result[0] == null) Thread.sleep(50);
+        }
+        assertNotNull(result[0]);
+        return result[0];
+    }
+
+    private static void capture(Window window, String name) {
+        try {
+            Path output = Path.of(System.getProperty("qa.directory"), name);
+            Files.createDirectories(output.getParent());
+            BufferedImage image = new BufferedImage(window.getWidth(), window.getHeight(), BufferedImage.TYPE_INT_RGB);
+            var graphics = image.createGraphics();
+            window.paintAll(graphics);
+            graphics.dispose();
+            ImageIO.write(image, "png", output.toFile());
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
     @Test void conflictCheckboxesAndBulkSelectionWork() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         UpdateUi ui = new UpdateUi();

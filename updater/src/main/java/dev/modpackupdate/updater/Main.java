@@ -88,12 +88,15 @@ public final class Main {
             if (selection == null) return 0;
             Map<String, Path> staged = new LinkedHashMap<>();
             int number = 0;
+            int downloadCount = (int) selection.changes().stream()
+                    .filter(change -> !change.disable() && !change.target().sha512().equals(change.observedHash())).count();
             for (Models.Change change : selection.changes()) {
                 if (change.disable() || change.target().sha512().equals(change.observedHash())) continue;
-                ui.progress("下载 " + (++number) + " · " + change.path());
+                ui.progress(UpdateUi.Stage.DOWNLOAD, "正在下载 · " + change.path(), number, downloadCount);
                 staged.put(change.path(), protocol.stage(change.target(), release));
+                ui.progress(UpdateUi.Stage.DOWNLOAD, "已就绪 · " + change.path(), ++number, downloadCount);
             }
-            ui.progress("安装文件并保存版本记录…");
+            ui.progress(UpdateUi.Stage.INSTALL, "安装文件并保存版本记录…", 0, 0);
             Models.Installed next = Planner.next(installed, release, targets, changes, selection.changes(), config);
             installer.install(installed, next, selection.changes(), staged, selection.deleteReplacedMods());
             long retained = next.files.values().stream().filter(Models.Baseline::retained).count();
