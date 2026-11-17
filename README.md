@@ -1,164 +1,22 @@
 # ModpackUpdate
 
-客户端整合包更新模组，支持 Modrinth `.mrpack` 格式。0.2.0 提供以下两个构建，发布包声明的 Minecraft、加载器类型和加载器版本必须与当前实例一致。
+**预览版 · 0.2.0**
 
-| 构建 | Minecraft | 加载器 | Java |
+ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrinth `.mrpack` 格式。游戏启动时检查新版，玩家确认后退出游戏，由独立更新程序完成安装。离线、没有更新或选择跳过时继续启动游戏。
+
+支持静默更新、文件冲突勾选、旧模组禁用和模组自身更新。默认保护键位、视频设置、存档和截图，并备份被覆盖的文件。配置、缓存和备份统一保存在游戏根目录的 `ModpackUpdate/` 下。
+
+| 平台 | Minecraft | 加载器 | Java |
 | --- | --- | --- | --- |
 | Fabric | 1.20.1 | Fabric Loader 0.16.10+ | 17+ |
 | NeoForge | 1.21.1 | NeoForge 21.1.266 | 21+ |
 
-Fabric 在 `preLaunch` 阶段检查更新。NeoForge 在 Mixin 配置插件的 `onLoad` 阶段检查，并通过模组构造入口提供一次性兜底。离线、检查失败、没有新版或玩家跳过时继续启动。确认更新后，独立 Java 更新程序接管，等待游戏进程完全退出，再下载和安装文件。完成后由玩家从启动器重新启动游戏。
+下载对应平台的 JAR，放入实例的 `mods/` 文件夹。整合包作者在 `ModpackUpdate/config/config.json` 中填写更新地址、包标识并启用更新，首次生成的配置默认关闭。更新完成后，从启动器重新启动游戏。 [下载预览版](https://github.com/chocoQAQ/ModpackUpdate/releases)
 
-## 开发计划
-
-日常开发使用 `dev` 分支。Fabric 与 NeoForge 共用 `bootstrap` 中的进程交接逻辑，以及 `updater` 中的下载、冲突选择、备份和恢复逻辑。
-
-## 构建与安装
-
-使用 `build.ps1` 指定构建平台。Fabric 构建使用 JDK 17 或 21，NeoForge 和全部平台构建使用 JDK 21。将 `JAVA_HOME` 设置为对应 JDK，首次构建需要联网。
-
-```powershell
-.\build.ps1 fabric
-.\build.ps1 neoforge
-.\build.ps1 all
-```
-
-省略平台参数会提示输入 `fabric`、`neoforge` 或 `all`。PowerShell 7 用户也可以在 Linux/macOS 上运行 `pwsh ./build.ps1 neoforge`。Windows 执行策略阻止脚本时，可以仅对本次进程允许执行。
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 neoforge
-```
-
-脚本先完成所选平台和独立更新程序的构建与测试，再同步产物。各平台的输出目录如下。
-
-| 参数 | 输出目录 | 内容 |
-| --- | --- | --- |
-| `fabric` | `build/dist/fabric/` | Fabric 模组和独立更新程序 |
-| `neoforge` | `build/dist/neoforge/` | NeoForge 模组和独立更新程序 |
-| `all` | `build/dist/all/` | 两个平台的模组和独立更新程序 |
-
-每次打包会同步所选输出目录，清除其中已过期的产物，因此该目录用于保存构建输出。脚本支持从其他工作目录调用，也会保留 Gradle 的失败退出码。平台后的参数直接传给 Gradle，例如使用已有缓存离线构建。
-
-```powershell
-.\build.ps1 fabric --offline
-```
-
-也可以直接调用 Gradle 任务。
-
-```sh
-./gradlew fabricDist
-./gradlew neoforgeDist
-./gradlew allDist
-```
-
-原有 `gradlew build` 仍会完整构建并输出到 `build/dist/`。安装时按实例平台选择一个模组 JAR 放进 `mods/`。
-
-- Fabric 使用 `ModpackUpdate-0.2.0.jar`。
-- NeoForge 21.1.266 使用 `ModpackUpdate-neoforge-1.21.1-0.2.0.jar`。
-- 独立程序为 `ModpackUpdate-updater-0.2.0.jar`，也已嵌入两个模组，供作者单独生成初始安装记录和调试。
-
-项目使用标准 Java Gradle 工程。NeoForge 构建依赖 21.1.266 官方元数据对应的 FML 4.0.45 与 Mixin 0.8.7，入口不引用 Minecraft 游戏类。NeoForge 模组类编译为 Java 21 字节码，公共进程交接和独立程序保留 Java 17 兼容性。
-
-NeoForge 使用独立 Swing 提示窗口。早期入口执行时，模组发现和依赖检查已经发生，其他早期插件也可能执行过。常规情况下检查发生于 Mixin 配置选取阶段，备用构造入口最多执行一次。独立服务器环境会跳过更新程序。
-
-## 实例目录
-
-```text
-<游戏根目录>/
-  mods/
-    ModpackUpdate.jar
-    old-mod.jar.disable
-  ModpackUpdate/
-    config/
-      config.json
-      installed.json
-    downloads/                  下载缓存、解压暂存，按 SHA-512 命名
-    runtime/                    按内容哈希命名的独立程序、日志、进程登记
-    1.0.0/<更新编号>/mods/       从 1.0.0 更新时备份的旧模组
-    1.0.0/<更新编号>/config/     被覆盖的其他文件备份
-    transaction.json            安装期间的恢复记录
-    update.lock
-```
-
-目录中的版本号表示被替换文件所属的旧版。更新编号允许多次更新和失败重试保留各自备份。日志在 `runtime/check-*.log`。下载缓存会复用，初版保留缓存供重试，游戏与更新程序都关闭后可手动清理 `downloads/`。运行记录和配置集中在 `ModpackUpdate/`。
-
-## 作者配置
-
-完整字段说明、默认值和安装记录解释见[配置文件文档](docs/configuration.md)。
-
-首次启动自动生成 `ModpackUpdate/config/config.json`，默认关闭更新。
-
-```json
-{
-  "enable": true,
-  "update-service-url": "https://updates.example.com/my-pack/latest.json",
-  "pack-id": "my-pack",
-  "silent-update": false,
-  "delete-replaced-mods": false,
-  "timeout-seconds": 10,
-  "protected-paths": [
-    "options.txt",
-    "optionsof.txt",
-    "servers.dat",
-    "saves/",
-    "screenshots/"
-  ]
-}
-```
-
-`silent-update` 跳过新版确认，无冲突时直接安装。有冲突或新增可选文件时仍显示选择窗口。`delete-replaced-mods` 默认关闭，也可以在安装确认窗口临时勾选。启用后，安装事务成功提交时删除本次被覆盖的旧 JAR 备份。安装进行期间仍保留可回滚的旧文件。
-
-`protected-paths` 使用相对路径，末尾 `/` 表示目录前缀。这些路径跳过安装，也不进入全选列表。作者可补充模组专用的键位、视频设置文件。`ModpackUpdate/` 自身始终由更新程序管理，发布包中同名文件不会覆盖正在使用的配置或安装记录。
-
-`timeout-seconds` 控制连接、请求及小文件响应超时，限制为 2–120 秒。超过 16 MiB 的文件响应体最多允许下载 30 分钟。元数据与每个产物有大小限制。下载失败可再次启动重试，已完整校验的缓存会复用。
-
-## 文件处理
-
-| 情况 | 行为 |
-| --- | --- |
-| 新旧目标哈希相同 | 跳过本地内容读取和下载 |
-| 本地文件与旧版基线一致 | 自动覆盖，原文件移入版本备份 |
-| 本地文件与新版一致 | 采用该文件，跳过下载 |
-| 本地修改、主动移除、或现有文件缺少基线 | 进入冲突选择，默认保留 |
-| 新增可选文件且本地没有 | 进入选择列表，默认不安装 |
-| 旧版受管模组在新版中消失 | 改名为 `.jar.disable` |
-| 旧版受管的其他文件在新版中消失 | 保留 |
-| 玩家自装、清单外的文件 | 保留 |
-
-冲突窗口提供逐项复选框、全选、全不选和取消更新。仅选中的冲突采用新版操作。新版 JAR 改名时，通常同时包含新增新版、禁用旧版两个操作。安装前检查直接放在 `mods/` 下的 JAR 是否出现当前加载器的重复 mod ID。Fabric 读取 `fabric.mod.json`，NeoForge 读取 `META-INF/neoforge.mods.toml` 中的所有 `[[mods]]`，发现重复会取消整次安装。完整模组依赖和嵌套 JAR 的解析由对应加载器在下次启动时完成。
-
-旧文件的缺席只能由本地 `installed.json` 和新完整清单对比得出，发布协议不接受任意删除命令。禁用的文件保留在 `mods/`，若 `.disable` 已存在会使用带更新编号的名称。已被玩家修改的旧模组禁用前同样需要勾选。
-
-备份和安装采用事务日志。所有待安装内容下载、校验完成后才开始写入实例。成功提交 `installed.json` 后，安装才算完成。中途失败会恢复旧文件，进程异常退出会在下次启动交给独立程序恢复。恢复失败会终止启动并保留日志与备份。
-
-保留差异会记录在 `installed.json` 的 `retained` 字段。该记录保存旧的原始基线和新的目标哈希，后续新版再次改动这个路径时会重新比较。选择保留可能导致整合包配置或模组组合与作者版本不同，需要玩家自行决定。
-
-## 自身更新
-
-把新版 ModpackUpdate 当作普通受管 JAR 发布即可，建议固定目标路径 `mods/ModpackUpdate.jar`。独立更新程序从 `runtime/` 启动，游戏退出后可以备份并覆盖原模组 JAR。下一次启动会从新版模组释放新版独立程序。
-
-当前更新由旧版内嵌更新程序执行，因此更新服务必须提供旧版能够读取的协议 v1。升级协议应先用兼容协议发布支持新协议的 ModpackUpdate。
-
-## 发布和验收
+当前版本已通过自动化测试，真实 Minecraft 整合包启动与不同启动器的兼容性仍待验证。
 
 - [配置文件说明](docs/configuration.md)
-- [发布协议](docs/publishing-protocol.md)
-- [打包和派生产物流程](docs/packaging.md)
+- [更新发布协议](docs/publishing-protocol.md)
+- [整合包打包流程](docs/packaging.md)
 
-自动测试覆盖文件冲突、用户保护路径、备份与直接删除选项、旧模组禁用、自身 JAR 替换、重复模组 ID、安装中断恢复、路径校验、下载校验与缓存。
-
-独立进程测试会启动模拟游戏，持有旧 JAR，检查交接信号到达后、游戏退出前该文件仍未改变，再验证更新后的文件与版本备份。Swing 测试检查逐项勾选和全选/全不选，并将窗口截图输出到 `updater/build/qa/`。无图形环境时跳过窗口测试。真实 Minecraft 启动与不同启动器的子进程生命周期仍需按下面步骤实测。
-
-NeoForge 测试使用实际 FML 4.0.45 API 和打包后的模组 JAR，在子进程中设置加载器上下文，检查客户端早期入口、构造兜底去重、独立服务器跳过以及安装锁冲突。测试同时验证元数据中的精确游戏/NeoForge 依赖和 Java 21 字节码。这些测试使用模拟启动上下文。
-
-真实游戏验收使用 Minecraft 1.20.1 Fabric 实例，或 Minecraft 1.21.1 / NeoForge 21.1.266 / Java 21 实例，配置本地或 HTTPS 更新源。
-
-1. 配置关闭、无新版、断网各启动一次，确认游戏正常进入。
-2. 发布新版并拒绝更新，确认继续原版游戏。
-3. 接受更新，确认游戏进程退出后才改变文件，更新完成后重新启动。
-4. 修改一个配置，确认复选框、全选、全不选和取消更新生效。
-5. 发布改名 JAR 和新版 ModpackUpdate，确认旧 JAR 被禁用、自身替换后能再次检查。
-6. 测试默认备份和直接删除选项，检查版本目录。
-7. 分别在下载和安装阶段终止独立进程，再次启动检查恢复结果。
-
-早期入口之前已发生加载器扫描和依赖解析。如果当前模组组合在此之前就导致加载器报错，更新入口无法运行。更新提示和冲突页使用独立 Swing 窗口，需要带桌面模块的 Java 运行环境。跨 Minecraft 或加载器版本切换需要通过启动器完成。
+开发使用 `dev` 分支。运行 `./build.ps1 fabric`、`./build.ps1 neoforge` 或 `./build.ps1 all` 构建，产物位于 `build/dist/<平台>/`。Fabric 构建使用 JDK 17 或 21，NeoForge 与全部平台构建使用 JDK 21。
