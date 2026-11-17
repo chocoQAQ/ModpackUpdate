@@ -62,7 +62,20 @@ HTTPS 与发布哈希用于传输和内容完整性校验。初版未实现独�
 
 ## Modrinth 解释规则
 
-使用 `formatVersion: 1`、`game: "minecraft"`。`dependencies.minecraft` 和 `dependencies.fabric-loader` 必须与运行中的实例完全一致。服务发布新版本时保留这两个依赖，初版跨版本切换交给启动器。
+使用 `formatVersion: 1`、`game: "minecraft"`。`dependencies.minecraft` 与加载器版本必须与运行中的实例完全一致。Fabric 使用 `dependencies.fabric-loader`，NeoForge 使用 `dependencies.neoforge`。一个发布只声明对应平台的加载器，跨游戏或加载器版本切换交给启动器。
+
+NeoForge 21.1.266 的索引依赖部分如下。
+
+```json
+{
+  "dependencies": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.266"
+  }
+}
+```
+
+Fabric 与 NeoForge 使用同一发布协议 v1。实例加载器由模组自动传给独立程序，作者为两个平台配置各自的更新源即可。
 
 索引的客户端 `env` 为 `unsupported` 时跳过，为 `optional` 时保留既有安装选择，新增可选内容默认不选。缺省按 `required` 处理。
 

@@ -1,7 +1,8 @@
 package dev.modpackupdate.updater;
 
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.*;
@@ -29,15 +30,17 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 class EndToEndTest {
     @TempDir Path root;
 
-    @Test void independentUpdaterWaitsForLockedGameJarThenUpdatesItself() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"fabric-loader,1.20.1,0.16.10", "neoforge,1.21.1,21.1.266"})
+    void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion) throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         root = root.toRealPath();
         Path original = root.resolve("mods/ModpackUpdate.jar");
         Files.createDirectories(original.getParent());
-        Files.write(original, jar("1"));
+        Files.write(original, jar("1", loaderType));
         String oldHash = FilesSupport.hash(original);
         Path payload = root.resolve("new.jar");
-        Files.write(payload, jar("2"));
+        Files.write(payload, jar("2", loaderType));
         String newHash = FilesSupport.hash(payload);
         Map<String, byte[]> responses = new HashMap<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -51,10 +54,10 @@ class EndToEndTest {
         String base = "http://127.0.0.1:" + server.getAddress().getPort();
         String index = """
                 {"formatVersion":1,"game":"minecraft","versionId":"1.1.0","name":"Test",
-                 "dependencies":{"minecraft":"1.20.1","fabric-loader":"0.16.10"},
+                 "dependencies":{"minecraft":"%s","%s":"%s"},
                  "files":[{"path":"mods/ModpackUpdate.jar","hashes":{"sha512":"%s"},
                            "fileSize":%d,"downloads":["%s/mod"]}]}
-                """.formatted(newHash, Files.size(payload), base);
+                """.formatted(minecraft, loaderType, loaderVersion, newHash, Files.size(payload), base);
         Path indexFile = root.resolve("index.json");
         Files.writeString(indexFile, index);
         Models.Artifact indexArtifact = new Models.Artifact(base + "/index", FilesSupport.hash(indexFile), Files.size(indexFile));
@@ -89,7 +92,7 @@ class EndToEndTest {
             while (!Files.exists(root.resolve("game-ready")) && System.nanoTime() < deadline) Thread.sleep(30);
             assertTrue(Files.exists(root.resolve("game-ready")));
             updater = new ProcessBuilder(java, "-cp", classpath, AutoUpdater.class.getName(),
-                    "check", root.toString(), Long.toString(game.pid()), signal.toString(), "1.20.1", "0.16.10")
+                    "check", root.toString(), Long.toString(game.pid()), signal.toString(), minecraft, loaderVersion, loaderType)
                     .redirectErrorStream(true).redirectOutput(root.resolve("updater.log").toFile()).start();
             assertTrue(updater.waitFor(25, TimeUnit.SECONDS), "Updater must finish after the simulated game exits");
             assertEquals(0, updater.exitValue(), Files.readString(root.resolve("updater.log")));
@@ -104,11 +107,17 @@ class EndToEndTest {
             server.stop(0);
         }
     }
-    private byte[] jar(String version) throws Exception {
+    private byte[] jar(String version, String loaderType) throws Exception {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(output)) {
-            zip.putNextEntry(new ZipEntry("fabric.mod.json"));
-            zip.write(("{\"schemaVersion\":1,\"id\":\"modpackupdate\",\"version\":\"" + version + "\"}").getBytes(StandardCharsets.UTF_8));
+            String metadata = "{\"schemaVersion\":1,\"id\":\"modpackupdate\",\"version\":\"" + version + "\"}";
+            String path = "fabric.mod.json";
+            if (loaderType.equals("neoforge")) {
+                path = "META-INF/neoforge.mods.toml";
+                metadata = "[[mods]]\nmodId=\"modpackupdate\"\nversion=\"" + version + "\"\n";
+            }
+            zip.putNextEntry(new ZipEntry(path));
+            zip.write(metadata.getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
         }
         return output.toByteArray();

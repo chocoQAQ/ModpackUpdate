@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="modpackupdate"
+version="${version}"
+displayName="ModpackUpdate"
+description='''Checks Modrinth modpack updates early and hands installation to an independent updater.'''
+
+[[mixins]]
+config="modpackupdate.neoforge.mixins.json"
+
+[[dependencies.modpackupdate]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.266]"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.modpackupdate]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="BOTH"
+
+[features.modpackupdate]
+javaVersion="[21,)"

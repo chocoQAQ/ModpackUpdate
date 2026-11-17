@@ -40,7 +40,7 @@ final class Downloads {
         Files.createDirectories(destination.getParent());
         for (int redirect = 0; redirect <= 5; redirect++) {
             HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(timeout))
-                    .header("User-Agent", "ModpackUpdate/0.1.0").GET().build();
+                    .header("User-Agent", "ModpackUpdate/0.2.0").GET().build();
             HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream input = response.body()) {
                 if (response.statusCode() >= 300 && response.statusCode() < 400) {

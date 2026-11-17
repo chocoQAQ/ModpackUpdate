@@ -15,13 +15,13 @@ public final class Main {
         int code = 0;
         try {
             if (args.length == 1 && args[0].equals("--version")) {
-                System.out.println("ModpackUpdate 0.1.0");
-            } else if (args.length == 6 && args[0].equals("seed")) {
+                System.out.println("ModpackUpdate 0.2.0");
+            } else if ((args.length == 6 || args.length == 7) && args[0].equals("seed")) {
                 seed(args);
-            } else if (args.length == 6 && args[0].equals("check")) {
+            } else if ((args.length == 6 || args.length == 7) && args[0].equals("check")) {
                 code = check(args);
             } else {
-                System.err.println("Usage: java -jar updater.jar seed <instance> <release-url> <pack-id> <minecraft> <fabric-loader>");
+                System.err.println("Usage: java -jar updater.jar seed <instance> <release-url> <pack-id> <minecraft> <loader-version> [fabric-loader|neoforge]");
                 code = 2;
             }
         } catch (Exception e) { e.printStackTrace(); code = 1; }
@@ -44,7 +44,8 @@ public final class Main {
         Path signal = requestedSignal.getParent().toRealPath().resolve(requestedSignal.getFileName());
         Path runtime = FilesSupport.resolve(root, "ModpackUpdate/runtime");
         if (!signal.getParent().equals(runtime) || !signal.getFileName().toString().startsWith("handoff-")) throw new IOException("无效交接路径");
-        Installer installer = new Installer(root);
+        String loaderType = loaderType(args);
+        Installer installer = new Installer(root, loaderType);
         boolean recovery = installer.pending();
         UpdateUi ui = new UpdateUi();
         boolean handedOff = false;
@@ -79,7 +80,7 @@ public final class Main {
             handoff(signal, parentId);
             handedOff = true;
             ui.progress("读取整合包索引并检查游戏版本…");
-            Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5]);
+            Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5], loaderType);
             ui.progress("检查即将变更的文件…");
             var changes = Planner.plan(root, config, installed, targets);
             UpdateUi.Selection selection = ui.choose(changes, config);
@@ -144,7 +145,7 @@ public final class Main {
         Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");
         Protocol protocol = new Protocol(new Downloads(30), cache);
         Models.Release release = protocol.release(args[2], args[3]);
-        Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5]);
+        Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5], loaderType(args));
         Models.Config config = new Models.Config();
         config.enable = true;
         config.packId = args[3];
@@ -163,5 +164,11 @@ public final class Main {
         if (!Files.exists(configFile)) FilesSupport.write(configFile, config);
         System.out.println("已生成 " + state + "。请将 config.json 的 update-service-url 指向正式更新入口。");
     }
+    private static String loaderType(String[] args) throws IOException {
+        String type = args.length == 7 ? args[6] : "fabric-loader";
+        if (!type.equals("fabric-loader") && !type.equals("neoforge")) throw new IOException("不支持的加载器 " + type);
+        return type;
+    }
+
     private Main() {}
 }

@@ -50,6 +50,10 @@ final class Protocol {
     }
 
     Map<String, Models.Target> targets(Models.Release release, Path root, String minecraft, String loader) throws Exception {
+        return targets(release, root, minecraft, loader, "fabric-loader");
+    }
+
+    Map<String, Models.Target> targets(Models.Release release, Path root, String minecraft, String loader, String loaderType) throws Exception {
         Path index;
         try { index = downloads.artifact(release.index(), cache); }
         catch (Exception e) {
@@ -61,12 +65,7 @@ final class Protocol {
             throw new IOException("只支持 Modrinth formatVersion 1 / Minecraft");
         }
         if (!release.version().equals(json.get("versionId").getAsString())) throw new IOException("清单版本不一致");
-        JsonObject dependencies = json.getAsJsonObject("dependencies");
-        if (!minecraft.equals(dependencies.get("minecraft").getAsString())
-                || !loader.equals(dependencies.get("fabric-loader").getAsString())
-                || dependencies.has("forge") || dependencies.has("neoforge") || dependencies.has("quilt-loader")) {
-            throw new IOException("目标 Minecraft / Fabric Loader 版本与当前实例不同，请先通过启动器安装对应版本");
-        }
+        validateDependencies(json.getAsJsonObject("dependencies"), minecraft, loader, loaderType);
         Map<String, Models.Target> result = new LinkedHashMap<>();
         Set<String> paths = new HashSet<>();
         for (var element : json.getAsJsonArray("files")) {
@@ -97,6 +96,18 @@ final class Protocol {
             result.put(file.path(), new Models.Target(file.path(), file.sha512(), file.size(), List.of(), true, false));
         }
         return result;
+    }
+
+    static void validateDependencies(JsonObject dependencies, String minecraft, String loader, String loaderType) throws IOException {
+        if (!List.of("fabric-loader", "neoforge").contains(loaderType)) throw new IOException("不支持的加载器 " + loaderType);
+        if (dependencies == null || !dependencies.has("minecraft") || !dependencies.has(loaderType)
+                || !minecraft.equals(dependencies.get("minecraft").getAsString())
+                || !loader.equals(dependencies.get(loaderType).getAsString())) {
+            throw new IOException("目标 Minecraft / " + loaderType + " 版本与当前实例不同，请先通过启动器安装对应版本");
+        }
+        for (String other : List.of("fabric-loader", "neoforge", "forge", "quilt-loader")) {
+            if (!other.equals(loaderType) && dependencies.has(other)) throw new IOException("整合包包含不匹配的加载器 " + other);
+        }
     }
     private static void validatePath(Path root, Set<String> paths, String path) throws IOException {
         FilesSupport.resolve(root, path);

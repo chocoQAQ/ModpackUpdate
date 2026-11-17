@@ -1,16 +1,21 @@
 # ModpackUpdate
 
-Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+、Fabric Loader 0.16.10+，支持 Modrinth `.mrpack` 格式。发布包声明的 Minecraft 和 Fabric Loader 版本必须与当前实例一致。
+客户端整合包更新模组，支持 Modrinth `.mrpack` 格式。0.2.0 提供以下两个构建，发布包声明的 Minecraft、加载器类型和加载器版本必须与当前实例一致。
 
-在 `preLaunch` 阶段检查更新。离线、检查失败、没有新版或玩家跳过时继续启动。确认更新后，独立 Java 更新程序接管，等待游戏进程完全退出，再下载和安装文件。完成后由玩家从启动器重新启动游戏。
+| 构建 | Minecraft | 加载器 | Java |
+| --- | --- | --- | --- |
+| Fabric | 1.20.1 | Fabric Loader 0.16.10+ | 17+ |
+| NeoForge | 1.21.1 | NeoForge 21.1.266 | 21+ |
+
+Fabric 在 `preLaunch` 阶段检查更新。NeoForge 在 Mixin 配置插件的 `onLoad` 阶段检查，并通过模组构造入口提供一次性兜底。离线、检查失败、没有新版或玩家跳过时继续启动。确认更新后，独立 Java 更新程序接管，等待游戏进程完全退出，再下载和安装文件。完成后由玩家从启动器重新启动游戏。
 
 ## 开发计划
 
-日常开发使用 `dev` 分支。下一阶段适配 NeoForge + Minecraft 1.21.1，复用独立更新程序、Modrinth 发布协议和文件冲突处理，补充对应的启动入口与版本校验。
+日常开发使用 `dev` 分支。Fabric 与 NeoForge 共用 `bootstrap` 中的进程交接逻辑，以及 `updater` 中的下载、冲突选择、备份和恢复逻辑。
 
 ## 构建与安装
 
-使用 JDK 17 或 21，将 `JAVA_HOME` 设置为对应 JDK。首次构建需要联网。
+完整构建使用 JDK 21，将 `JAVA_HOME` 设置为对应 JDK。首次构建需要联网。仅构建 Fabric 时可以使用 JDK 17 执行 `gradlew :fabric:build :updater:test`。
 
 ```powershell
 .\gradlew.bat build
@@ -20,9 +25,15 @@ Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+
 ./gradlew build
 ```
 
-构建结果在 `build/dist/`。把 `ModpackUpdate-0.1.0.jar` 放入实例 `mods/`。独立更新程序已嵌入模组，`ModpackUpdate-updater-0.1.0.jar` 同时单独输出，供作者生成初始安装记录和调试。
+完整构建结果在 `build/dist/`，按实例平台选择一个模组 JAR 放进 `mods/`。
 
-项目直接依赖 Fabric Loader 的公开入口 API，使用标准 Java Gradle 工程。入口不引用 Minecraft 类，因此无需映射或 Fabric API。游戏内集成验收步骤见下文。
+- Fabric 使用 `ModpackUpdate-0.2.0.jar`。
+- NeoForge 21.1.266 使用 `ModpackUpdate-neoforge-1.21.1-0.2.0.jar`。
+- 独立程序为 `ModpackUpdate-updater-0.2.0.jar`，也已嵌入两个模组，供作者单独生成初始安装记录和调试。
+
+项目使用标准 Java Gradle 工程。NeoForge 构建依赖 21.1.266 官方元数据对应的 FML 4.0.45 与 Mixin 0.8.7，入口不引用 Minecraft 游戏类。NeoForge 模组类编译为 Java 21 字节码，公共进程交接和独立程序保留 Java 17 兼容性。
+
+NeoForge 使用独立 Swing 提示窗口。早期入口执行时，模组发现和依赖检查已经发生，其他早期插件也可能执行过。常规情况下检查发生于 Mixin 配置选取阶段，备用构造入口最多执行一次。独立服务器环境会跳过更新程序。
 
 ## 实例目录
 
@@ -88,7 +99,7 @@ Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+
 | 旧版受管的其他文件在新版中消失 | 保留 |
 | 玩家自装、清单外的文件 | 保留 |
 
-冲突窗口提供逐项复选框、全选、全不选和取消更新。仅选中的冲突采用新版操作。新版 JAR 改名时，通常同时包含新增新版、禁用旧版两个操作。安装前检查直接放在 `mods/` 下的 JAR 是否出现重复 Fabric mod ID，发现重复会取消整次安装。完整模组依赖和嵌套 JAR 的解析仍由 Fabric Loader 在下次启动时完成。
+冲突窗口提供逐项复选框、全选、全不选和取消更新。仅选中的冲突采用新版操作。新版 JAR 改名时，通常同时包含新增新版、禁用旧版两个操作。安装前检查直接放在 `mods/` 下的 JAR 是否出现当前加载器的重复 mod ID。Fabric 读取 `fabric.mod.json`，NeoForge 读取 `META-INF/neoforge.mods.toml` 中的所有 `[[mods]]`，发现重复会取消整次安装。完整模组依赖和嵌套 JAR 的解析由对应加载器在下次启动时完成。
 
 旧文件的缺席只能由本地 `installed.json` 和新完整清单对比得出，发布协议不接受任意删除命令。禁用的文件保留在 `mods/`，若 `.disable` 已存在会使用带更新编号的名称。已被玩家修改的旧模组禁用前同样需要勾选。
 
@@ -112,7 +123,9 @@ Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+
 
 独立进程测试会启动模拟游戏，持有旧 JAR，检查交接信号到达后、游戏退出前该文件仍未改变，再验证更新后的文件与版本备份。Swing 测试检查逐项勾选和全选/全不选，并将窗口截图输出到 `updater/build/qa/`。无图形环境时跳过窗口测试。真实 Minecraft 启动与不同启动器的子进程生命周期仍需按下面步骤实测。
 
-真实游戏验收需要一个 Minecraft 1.20.1 Fabric 实例和本地或 HTTPS 更新源。
+NeoForge 测试使用实际 FML 4.0.45 API 和打包后的模组 JAR，在子进程中设置加载器上下文，检查客户端早期入口、构造兜底去重、独立服务器跳过以及安装锁冲突。测试同时验证元数据中的精确游戏/NeoForge 依赖和 Java 21 字节码。这些测试使用模拟启动上下文。
+
+真实游戏验收使用 Minecraft 1.20.1 Fabric 实例，或 Minecraft 1.21.1 / NeoForge 21.1.266 / Java 21 实例，配置本地或 HTTPS 更新源。
 
 1. 配置关闭、无新版、断网各启动一次，确认游戏正常进入。
 2. 发布新版并拒绝更新，确认继续原版游戏。
@@ -122,4 +135,4 @@ Fabric 客户端整合包更新模组。初版针对 Minecraft 1.20.1、Java 17+
 6. 测试默认备份和直接删除选项，检查版本目录。
 7. 分别在下载和安装阶段终止独立进程，再次启动检查恢复结果。
 
-`preLaunch` 之前已发生 Fabric 扫描和依赖解析。如果当前模组组合在此之前就导致 Loader 报错，更新入口无法运行。初版的更新提示和冲突页使用独立 Swing 窗口，需要带桌面模块的 Java 运行环境。初版不会自动修改启动器的 Minecraft / Loader 配置。
+早期入口之前已发生加载器扫描和依赖解析。如果当前模组组合在此之前就导致加载器报错，更新入口无法运行。更新提示和冲突页使用独立 Swing 窗口，需要带桌面模块的 Java 运行环境。跨 Minecraft 或加载器版本切换需要通过启动器完成。

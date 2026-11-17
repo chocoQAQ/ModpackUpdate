@@ -1,7 +1,5 @@
 package dev.modpackupdate.updater;
 
-import com.google.gson.JsonParser;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,8 +16,13 @@ final class Installer {
     private final Path work;
     private final Path state;
     private final Path journalFile;
+    private final String loaderType;
     Installer(Path root) throws IOException {
+        this(root, "fabric-loader");
+    }
+    Installer(Path root, String loaderType) throws IOException {
         this.root = root;
+        this.loaderType = loaderType;
         work = FilesSupport.resolve(root, "ModpackUpdate");
         state = FilesSupport.resolve(root, "ModpackUpdate/config/installed.json");
         journalFile = FilesSupport.resolve(root, "ModpackUpdate/transaction.json");
@@ -146,12 +149,7 @@ final class Installer {
         Map<String, String> ids = new HashMap<>();
         for (var entry : active.entrySet()) {
             try (ZipFile zip = new ZipFile(entry.getValue().toFile())) {
-                var metadata = zip.getEntry("fabric.mod.json");
-                if (metadata == null) continue;
-                if (metadata.getSize() > 1024 * 1024) throw new IOException("fabric.mod.json 过大");
-                try (var input = zip.getInputStream(metadata)) {
-                    String text = new String(input.readNBytes(1024 * 1024), java.nio.charset.StandardCharsets.UTF_8);
-                    String id = JsonParser.parseString(text).getAsJsonObject().get("id").getAsString();
+                for (String id : ModMetadata.ids(zip, loaderType)) {
                     String previous = ids.putIfAbsent(id, entry.getKey());
                     if (previous != null) throw new IOException("存在两个相同 ID 的模组 " + previous + " / " + entry.getKey() + "，请调整冲突选择");
                 }
