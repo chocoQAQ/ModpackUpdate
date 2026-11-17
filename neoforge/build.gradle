@@ -1,42 +1,26 @@
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
 repositories { maven { url = 'https://libraries.minecraft.net/' } }
-tasks.withType(JavaCompile).configureEach { options.release = 21 }
 
 dependencies {
-    implementation project(':bootstrap')
-    compileOnly 'net.neoforged.fancymodloader:loader:4.0.45'
-    compileOnly 'net.fabricmc:sponge-mixin:0.16.4+mixin.0.8.7'
-    testImplementation 'net.neoforged.fancymodloader:loader:4.0.45'
-    testImplementation 'net.fabricmc:sponge-mixin:0.16.4+mixin.0.8.7'
+    compileOnly "net.neoforged.fancymodloader:loader:${buildTarget.dependencies.fml}"
+    compileOnly "net.fabricmc:sponge-mixin:${buildTarget.dependencies.mixin}"
+    testImplementation "net.neoforged.fancymodloader:loader:${buildTarget.dependencies.fml}"
+    testImplementation "net.fabricmc:sponge-mixin:${buildTarget.dependencies.mixin}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-def modVersion = project.version.toString()
+def metadata = [version: project.version.toString(), minecraft: buildTarget.minecraft,
+                loaderRange: buildTarget.loaderRange, javaVersion: buildTarget.java,
+                languageLoaderRange: buildTarget.dependencies.languageLoaderRange,
+                mixinMinVersion: buildTarget.dependencies.mixinMinVersion]
 processResources {
-    inputs.property 'version', modVersion
-    filesMatching('META-INF/neoforge.mods.toml') { expand version: modVersion }
-}
-
-jar {
-    dependsOn ':updater:jar'
-    archiveBaseName = 'ModpackUpdate-neoforge-1.21.1'
-    from project(':bootstrap').sourceSets.main.output
-    from(project(':updater').tasks.named('jar')) {
-        into 'modpackupdate'
-        rename { 'updater.jar' }
-    }
+    inputs.properties(metadata)
+    filesMatching(['META-INF/neoforge.mods.toml', 'modpackupdate.neoforge.mixins.json']) { expand metadata }
 }
 
 test {
-    useJUnitPlatform()
-    dependsOn jar
     doFirst {
-        systemProperty 'neoforge.mod.jar', tasks.jar.archiveFile.get().asFile.absolutePath
         systemProperty 'neoforge.test.classpath', sourceSets.test.runtimeClasspath.asPath
+        systemProperty 'target.fml', buildTarget.dependencies.fml
     }
 }

@@ -1,6 +1,6 @@
 # 配置文件说明
 
-本文对应 ModpackUpdate 0.2.0，适用于 Fabric 1.20.1 与 NeoForge 21.1.266 / Minecraft 1.21.1。两个平台使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
+本文对应 ModpackUpdate 0.3.0-preview.1，适用于 Fabric 1.20.1 / 1.21.1 与 NeoForge 21.1.266 / Minecraft 1.21.1。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
 
 ## 文件位置与生效时机
 

@@ -1,5 +1,5 @@
 modLoader="javafml"
-loaderVersion="[4,)"
+loaderVersion="${languageLoaderRange}"
 license="All Rights Reserved"
 
 [[mods]]
@@ -14,16 +14,16 @@ config="modpackupdate.neoforge.mixins.json"
 [[dependencies.modpackupdate]]
 modId="neoforge"
 type="required"
-versionRange="[21.1.266]"
+versionRange="${loaderRange}"
 ordering="NONE"
 side="BOTH"
 
 [[dependencies.modpackupdate]]
 modId="minecraft"
 type="required"
-versionRange="[1.21.1]"
+versionRange="[${minecraft}]"
 ordering="NONE"
 side="BOTH"
 
 [features.modpackupdate]
-javaVersion="[21,)"
+javaVersion="[${javaVersion},)"

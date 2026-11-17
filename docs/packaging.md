@@ -35,13 +35,13 @@ latest.json
 仓库提供本地 `seed` 命令，可从一个已经发布的固定版本生成出厂记录。
 
 ```powershell
-java -jar build/dist/ModpackUpdate-updater-0.2.0.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.1.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
 ```
 
 NeoForge 1.21.1 实例在末尾增加 `neoforge` 参数，并指定准确的加载器版本。
 
 ```powershell
-java -jar build/dist/ModpackUpdate-updater-0.2.0.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.1.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
 ```
 
 省略最后一个参数时按 `fabric-loader` 处理，兼容先前的 Fabric 命令。用于 NeoForge 的 `.mrpack` 索引声明 `dependencies.neoforge`，模组文件选择对应的 NeoForge 构建。

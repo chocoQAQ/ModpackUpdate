@@ -12,7 +12,7 @@ test {
 }
 jar {
     archiveBaseName = 'ModpackUpdate-updater'
-    manifest { attributes 'Main-Class': 'dev.modpackupdate.updater.Main' }
+    manifest { attributes 'Main-Class': 'dev.modpackupdate.updater.Main', 'Implementation-Version': project.version.toString() }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.runtimeClasspath.collect { zipTree(it) } }
     exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'

@@ -1,18 +1,14 @@
 dependencies {
-    compileOnly 'net.fabricmc:fabric-loader:0.16.10'
-    implementation project(':bootstrap')
+    compileOnly "net.fabricmc:fabric-loader:${buildTarget.loaderVersion}"
+    testImplementation "net.fabricmc:fabric-loader:${buildTarget.loaderVersion}"
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
-def modVersion = project.version.toString()
+
+def metadata = [version: project.version.toString(), minecraft: buildTarget.minecraft,
+                loaderRange: buildTarget.loaderRange, javaVersion: buildTarget.java]
 processResources {
-    inputs.property 'version', modVersion
-    filesMatching('fabric.mod.json') { expand version: modVersion }
-}
-jar {
-    dependsOn ':updater:jar'
-    archiveBaseName = 'ModpackUpdate'
-    from project(':bootstrap').sourceSets.main.output
-    from(project(':updater').tasks.named('jar')) {
-        into 'modpackupdate'
-        rename { 'updater.jar' }
-    }
+    inputs.properties(metadata)
+    filesMatching('fabric.mod.json') { expand metadata }
 }

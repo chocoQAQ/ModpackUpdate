@@ -1,18 +1,17 @@
 plugins { id 'base' }
 
+version = providers.gradleProperty('modVersion').get()
+
 subprojects {
     apply plugin: 'java'
     group = 'dev.modpackupdate'
-    version = '0.2.0'
+    version = rootProject.version
     repositories {
         mavenCentral()
         maven { url = 'https://maven.fabricmc.net/' }
         maven { url = 'https://maven.neoforged.net/releases/' }
     }
-    java {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+    java { toolchain.languageVersion = JavaLanguageVersion.of(17) }
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
         options.release = 17
@@ -23,31 +22,75 @@ subprojects {
     }
 }
 
-tasks.register('dist', Copy) {
-    dependsOn ':fabric:jar', ':neoforge:jar', ':updater:jar'
-    from project(':fabric').tasks.named('jar')
-    from project(':neoforge').tasks.named('jar')
-    from project(':updater').tasks.named('jar')
-    into layout.buildDirectory.dir('dist')
+def targets = gradle.ext.buildTargets
+targets.each { target ->
+    project(":${target.id}") {
+        ext.buildTarget = target
+        layout.buildDirectory = rootProject.layout.buildDirectory.dir("targets/${target.id}")
+        sourceSets {
+            main {
+                java.setSrcDirs([rootProject.file("${target.adapter}/src/main/java")])
+                resources.setSrcDirs([rootProject.file("${target.adapter}/src/main/resources")])
+            }
+            test {
+                java.setSrcDirs([rootProject.file("${target.adapter}/src/test/java")])
+                resources.setSrcDirs([rootProject.file("${target.adapter}/src/test/resources")])
+            }
+        }
+        java { toolchain.languageVersion = JavaLanguageVersion.of(target.java) }
+        tasks.withType(JavaCompile).configureEach { options.release = target.java }
+        dependencies { implementation project(':bootstrap') }
+        apply from: rootProject.file("${target.adapter}/build.gradle")
+        tasks.named('jar') {
+            dependsOn ':updater:jar'
+            archiveFileName = "ModpackUpdate-${project.version}-${target.platform}-mc${target.minecraft}.jar"
+            from project(':bootstrap').sourceSets.main.output
+            from(project(':updater').tasks.named('jar')) {
+                into 'modpackupdate'
+                rename { 'updater.jar' }
+            }
+        }
+        tasks.named('test') {
+            useJUnitPlatform()
+            dependsOn tasks.named('jar')
+            doFirst {
+                systemProperty 'target.mod.jar', tasks.jar.archiveFile.get().asFile.absolutePath
+                systemProperty 'target.version', project.version.toString()
+                systemProperty 'target.minecraft', target.minecraft
+                systemProperty 'target.loaderVersion', target.loaderVersion
+                systemProperty 'target.loaderRange', target.loaderRange
+                systemProperty 'target.java', target.java.toString()
+            }
+        }
+    }
 }
-tasks.named('build') { dependsOn 'dist', ':updater:test', ':neoforge:test' }
 
-def platformLoaders = [
-    fabric: ['fabric'],
-    neoforge: ['neoforge'],
-    all: ['fabric', 'neoforge']
-]
-
-platformLoaders.each { platform, loaders ->
-    tasks.register("${platform}Dist", Sync) {
+def distribution = { String taskName, List selected, String output ->
+    tasks.register(taskName, Sync) {
         group = 'build'
-        description = "Builds and tests the ${platform} distribution."
+        description = "Builds and tests ${selected.collect { it.id }.join(', ')}."
         dependsOn ':updater:build'
         from project(':updater').tasks.named('jar')
-        loaders.each { loader ->
-            dependsOn ":${loader}:build"
-            from project(":${loader}").tasks.named('jar')
+        selected.each { target ->
+            dependsOn ":${target.id}:build"
+            from project(":${target.id}").tasks.named('jar')
         }
-        into layout.buildDirectory.dir("dist/${platform}")
+        into layout.buildDirectory.dir("dist/${output}")
+    }
+}
+targets.each { target -> distribution("${target.id}Dist", [target], target.id) }
+targets.collect { it.platform }.unique().each { platform ->
+    distribution("${platform}Dist", targets.findAll { it.platform == platform }, platform)
+}
+distribution('allDist', targets, 'all')
+tasks.register('dist') { dependsOn 'allDist' }
+tasks.named('build') { dependsOn 'allDist' }
+tasks.register('listTargets') {
+    group = 'help'
+    description = 'Lists the supported build targets.'
+    doLast {
+        targets.each { target ->
+            println "${target.id}: ${target.platform} ${target.loaderVersion}, Minecraft ${target.minecraft}, Java ${target.java}"
+        }
     }
 }

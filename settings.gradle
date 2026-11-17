@@ -1,2 +1,41 @@
+import groovy.json.JsonSlurper
+
 rootProject.name = 'ModpackUpdate'
-include 'bootstrap', 'fabric', 'neoforge', 'updater'
+include 'bootstrap', 'updater'
+
+def manifest = new JsonSlurper().parse(file('build-targets.json'))
+if (manifest.schemaVersion != 1 || !(manifest.targets instanceof List) || manifest.targets.isEmpty()) {
+    throw new GradleException('build-targets.json must contain schemaVersion 1 and a non-empty targets array')
+}
+def ids = [] as Set
+manifest.targets.each { target ->
+    if (!(target instanceof Map)) throw new GradleException('Each build target must be an object')
+    ['id', 'platform', 'minecraft', 'loaderVersion', 'loaderRange', 'adapter'].each { key ->
+        if (!(target[key] instanceof String) || !target[key].trim()) {
+            throw new GradleException("Build target is missing a string field: ${key}")
+        }
+    }
+    if (!(target.platform in ['fabric', 'neoforge']) || target.adapter != target.platform ||
+            !(target.minecraft ==~ /[0-9]+\.[0-9]+(?:\.[0-9]+)?/) ||
+            target.id != "${target.platform}-${target.minecraft}") {
+        throw new GradleException("Unsupported target or adapter: ${target.id}")
+    }
+    if (!ids.add(target.id)) throw new GradleException("Duplicate build target: ${target.id}")
+    if (!(target.java instanceof Integer) || target.java < 17) {
+        throw new GradleException("Target ${target.id} requires Java 17 or newer")
+    }
+    if (target.platform == 'neoforge') {
+        if (target.java < 21) throw new GradleException('The current NeoForge adapter requires Java 21 or newer')
+        ['fml', 'languageLoaderRange', 'mixin', 'mixinMinVersion'].each { key ->
+            if (!(target.dependencies?.get(key) instanceof String) || !target.dependencies[key].trim()) {
+                throw new GradleException("Target ${target.id} is missing dependencies.${key}")
+            }
+        }
+    }
+    include target.id
+    // Sources stay in the adapter directory; every target gets an isolated Gradle project.
+    def directory = file(".gradle/target-projects/${target.id}")
+    directory.mkdirs()
+    project(":${target.id}").projectDir = directory
+}
+gradle.ext.buildTargets = manifest.targets

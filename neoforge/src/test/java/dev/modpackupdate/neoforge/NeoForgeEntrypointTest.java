@@ -25,15 +25,18 @@ class NeoForgeEntrypointTest {
     @TempDir Path root;
 
     @Test void packagedMetadataAndClassVersionMatchRequestedPlatform() throws Exception {
-        try (ZipFile zip = new ZipFile(System.getProperty("neoforge.mod.jar"))) {
+        try (ZipFile zip = new ZipFile(System.getProperty("target.mod.jar"))) {
             var metadata = zip.getEntry("META-INF/neoforge.mods.toml");
             assertNotNull(metadata);
             try (var reader = new InputStreamReader(zip.getInputStream(metadata), StandardCharsets.UTF_8)) {
                 var toml = new TomlParser().parse(reader);
                 assertEquals("javafml", toml.get("modLoader"));
                 List<UnmodifiableConfig> dependencies = toml.get("dependencies.modpackupdate");
-                assertEquals("[21.1.266]", dependencies.stream().filter(item -> "neoforge".equals(item.get("modId"))).findFirst().orElseThrow().get("versionRange"));
-                assertEquals("[1.21.1]", dependencies.stream().filter(item -> "minecraft".equals(item.get("modId"))).findFirst().orElseThrow().get("versionRange"));
+                assertEquals(System.getProperty("target.loaderRange"), dependencies.stream().filter(item -> "neoforge".equals(item.get("modId"))).findFirst().orElseThrow().get("versionRange"));
+                assertEquals("[" + System.getProperty("target.minecraft") + "]", dependencies.stream().filter(item -> "minecraft".equals(item.get("modId"))).findFirst().orElseThrow().get("versionRange"));
+                List<UnmodifiableConfig> mods = toml.get("mods");
+                assertEquals(System.getProperty("target.version"), mods.get(0).get("version"));
+                assertEquals("[" + System.getProperty("target.java") + ",)", toml.get("features.modpackupdate.javaVersion"));
                 List<UnmodifiableConfig> mixins = toml.get("mixins");
                 assertNotNull(zip.getEntry(mixins.get(0).get("config")));
             }
@@ -42,7 +45,7 @@ class NeoForgeEntrypointTest {
             try (var input = new java.io.DataInputStream(zip.getInputStream(zip.getEntry("dev/modpackupdate/neoforge/UpdateMixinPlugin.class")))) {
                 assertEquals(0xCAFEBABE, input.readInt());
                 input.readUnsignedShort();
-                assertEquals(65, input.readUnsignedShort());
+                assertEquals(Integer.parseInt(System.getProperty("target.java")) + 44, input.readUnsignedShort());
             }
         }
     }
@@ -70,8 +73,9 @@ class NeoForgeEntrypointTest {
 
     private void runProbe(String mode) throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
-        String classpath = System.getProperty("neoforge.mod.jar") + File.pathSeparator + System.getProperty("neoforge.test.classpath");
-        Process process = new ProcessBuilder(java, "-cp", classpath, Probe.class.getName(), root.toString(), mode)
+        String classpath = System.getProperty("target.mod.jar") + File.pathSeparator + System.getProperty("neoforge.test.classpath");
+        Process process = new ProcessBuilder(java, "-cp", classpath, Probe.class.getName(), root.toString(), mode,
+                System.getProperty("target.loaderVersion"), System.getProperty("target.fml"), System.getProperty("target.minecraft"))
                 .redirectErrorStream(true).redirectOutput(root.resolve("probe.log").toFile()).start();
         try {
             assertTrue(process.waitFor(20, TimeUnit.SECONDS));
@@ -83,7 +87,7 @@ class NeoForgeEntrypointTest {
         public static void main(String[] args) throws Exception {
             setLoaderField("dist", args[1].equals("server") ? Dist.DEDICATED_SERVER : Dist.CLIENT);
             setLoaderField("gamePath", Path.of(args[0]));
-            setLoaderField("versionInfo", new VersionInfo("21.1.266", "4.0.45", "1.21.1", "20240808.144430"));
+            setLoaderField("versionInfo", new VersionInfo(args[2], args[3], args[4], "20240808.144430"));
             var plugin = new UpdateMixinPlugin();
             if (args[1].equals("locked")) {
                 try {

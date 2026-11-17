@@ -15,7 +15,8 @@ public final class Main {
         int code = 0;
         try {
             if (args.length == 1 && args[0].equals("--version")) {
-                System.out.println("ModpackUpdate 0.2.0");
+                String version = Main.class.getPackage().getImplementationVersion();
+                System.out.println("ModpackUpdate " + (version == null ? "development" : version));
             } else if ((args.length == 6 || args.length == 7) && args[0].equals("seed")) {
                 seed(args);
             } else if ((args.length == 6 || args.length == 7) && args[0].equals("check")) {
