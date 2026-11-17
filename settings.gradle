@@ -1,0 +1,2 @@
+rootProject.name = 'ModpackUpdate'
+include 'fabric', 'updater'

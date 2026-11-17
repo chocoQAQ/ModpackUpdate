@@ -1,0 +1,18 @@
+dependencies {
+    implementation 'com.google.code.gson:gson:2.11.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+test {
+    useJUnitPlatform()
+    dependsOn jar
+    doFirst { systemProperty 'updater.jar', tasks.jar.archiveFile.get().asFile.absolutePath }
+    systemProperty 'qa.directory', layout.buildDirectory.dir('qa').get().asFile.absolutePath
+}
+jar {
+    archiveBaseName = 'ModpackUpdate-updater'
+    manifest { attributes 'Main-Class': 'dev.modpackupdate.updater.Main' }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.runtimeClasspath.collect { zipTree(it) } }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}

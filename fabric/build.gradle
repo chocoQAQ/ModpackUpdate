@@ -1,0 +1,13 @@
+dependencies { compileOnly 'net.fabricmc:fabric-loader:0.16.10' }
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+jar {
+    dependsOn ':updater:jar'
+    archiveBaseName = 'ModpackUpdate'
+    from(project(':updater').tasks.named('jar')) {
+        into 'modpackupdate'
+        rename { 'updater.jar' }
+    }
+}

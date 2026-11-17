@@ -1,0 +1,31 @@
+plugins { id 'base' }
+
+subprojects {
+    apply plugin: 'java'
+    group = 'dev.modpackupdate'
+    version = '0.1.0'
+    repositories {
+        mavenCentral()
+        maven { url = 'https://maven.fabricmc.net/' }
+    }
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = 17
+    }
+    tasks.withType(AbstractArchiveTask).configureEach {
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+}
+
+tasks.register('dist', Copy) {
+    dependsOn ':fabric:jar', ':updater:jar'
+    from project(':fabric').tasks.named('jar')
+    from project(':updater').tasks.named('jar')
+    into layout.buildDirectory.dir('dist')
+}
+tasks.named('build') { dependsOn 'dist', ':updater:test' }
