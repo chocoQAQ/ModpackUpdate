@@ -31,3 +31,23 @@ tasks.register('dist', Copy) {
     into layout.buildDirectory.dir('dist')
 }
 tasks.named('build') { dependsOn 'dist', ':updater:test', ':neoforge:test' }
+
+def platformLoaders = [
+    fabric: ['fabric'],
+    neoforge: ['neoforge'],
+    all: ['fabric', 'neoforge']
+]
+
+platformLoaders.each { platform, loaders ->
+    tasks.register("${platform}Dist", Sync) {
+        group = 'build'
+        description = "Builds and tests the ${platform} distribution."
+        dependsOn ':updater:build'
+        from project(':updater').tasks.named('jar')
+        loaders.each { loader ->
+            dependsOn ":${loader}:build"
+            from project(":${loader}").tasks.named('jar')
+        }
+        into layout.buildDirectory.dir("dist/${platform}")
+    }
+}

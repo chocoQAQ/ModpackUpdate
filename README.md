@@ -15,17 +15,43 @@ Fabric 在 `preLaunch` 阶段检查更新。NeoForge 在 Mixin 配置插件的 `
 
 ## 构建与安装
 
-完整构建使用 JDK 21，将 `JAVA_HOME` 设置为对应 JDK。首次构建需要联网。仅构建 Fabric 时可以使用 JDK 17 执行 `gradlew :fabric:build :updater:test`。
+使用 `build.ps1` 指定构建平台。Fabric 构建使用 JDK 17 或 21，NeoForge 和全部平台构建使用 JDK 21。将 `JAVA_HOME` 设置为对应 JDK，首次构建需要联网。
 
 ```powershell
-.\gradlew.bat build
+.\build.ps1 fabric
+.\build.ps1 neoforge
+.\build.ps1 all
 ```
+
+省略平台参数会提示输入 `fabric`、`neoforge` 或 `all`。PowerShell 7 用户也可以在 Linux/macOS 上运行 `pwsh ./build.ps1 neoforge`。Windows 执行策略阻止脚本时，可以仅对本次进程允许执行。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 neoforge
+```
+
+脚本先完成所选平台和独立更新程序的构建与测试，再同步产物。各平台的输出目录如下。
+
+| 参数 | 输出目录 | 内容 |
+| --- | --- | --- |
+| `fabric` | `build/dist/fabric/` | Fabric 模组和独立更新程序 |
+| `neoforge` | `build/dist/neoforge/` | NeoForge 模组和独立更新程序 |
+| `all` | `build/dist/all/` | 两个平台的模组和独立更新程序 |
+
+每次打包会同步所选输出目录，清除其中已过期的产物，因此该目录用于保存构建输出。脚本支持从其他工作目录调用，也会保留 Gradle 的失败退出码。平台后的参数直接传给 Gradle，例如使用已有缓存离线构建。
+
+```powershell
+.\build.ps1 fabric --offline
+```
+
+也可以直接调用 Gradle 任务。
 
 ```sh
-./gradlew build
+./gradlew fabricDist
+./gradlew neoforgeDist
+./gradlew allDist
 ```
 
-完整构建结果在 `build/dist/`，按实例平台选择一个模组 JAR 放进 `mods/`。
+原有 `gradlew build` 仍会完整构建并输出到 `build/dist/`。安装时按实例平台选择一个模组 JAR 放进 `mods/`。
 
 - Fabric 使用 `ModpackUpdate-0.2.0.jar`。
 - NeoForge 21.1.266 使用 `ModpackUpdate-neoforge-1.21.1-0.2.0.jar`。
