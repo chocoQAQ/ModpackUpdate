@@ -62,7 +62,16 @@ HTTPS 与发布哈希用于传输和内容完整性校验。初版未实现独�
 
 ## Modrinth 解释规则
 
-使用 `formatVersion: 1`、`game: "minecraft"`。`dependencies.minecraft` 与加载器版本必须与运行中的实例完全一致。Fabric 使用 `dependencies.fabric-loader`，NeoForge 使用 `dependencies.neoforge`。一个发布只声明对应平台的加载器，跨游戏或加载器版本切换交给启动器。
+使用 `formatVersion: 1`、`game: "minecraft"`。`dependencies.minecraft` 与加载器版本必须与运行中的实例完全一致。各加载器使用以下字段：
+
+| 实例加载器 | 索引依赖字段 |
+| --- | --- |
+| Fabric | `dependencies.fabric-loader` |
+| NeoForge | `dependencies.neoforge` |
+| Forge | `dependencies.forge` |
+| Quilt | `dependencies.quilt-loader` |
+
+一个发布只声明对应平台的加载器，跨游戏或加载器版本切换交给启动器。
 
 NeoForge 21.1.266 的索引依赖部分如下。
 
@@ -75,7 +84,7 @@ NeoForge 21.1.266 的索引依赖部分如下。
 }
 ```
 
-Fabric 与 NeoForge 使用同一发布协议 v1。实例加载器由模组自动传给独立程序，作者为两个平台配置各自的更新源即可。
+四个平台使用同一发布协议 v1。实例加载器由模组自动传给独立程序，作者为各个平台、游戏版本配置各自的更新源即可。Quilt 实例的索引声明 `quilt-loader`，即使包中包含 Fabric 模组，也不要同时声明 `fabric-loader`。安装前的重复模组 ID 检查优先读取 `quilt.mod.json`，没有该文件时读取 `fabric.mod.json`；Forge 读取 `META-INF/mods.toml`，NeoForge 读取 `META-INF/neoforge.mods.toml`。
 
 索引的客户端 `env` 为 `unsupported` 时跳过，为 `optional` 时保留既有安装选择，新增可选内容默认不选。缺省按 `required` 处理。
 

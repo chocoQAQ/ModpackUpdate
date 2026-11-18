@@ -31,7 +31,8 @@ class EndToEndTest {
     @TempDir Path root;
 
     @ParameterizedTest
-    @CsvSource({"fabric-loader,1.20.1,0.16.10", "neoforge,1.21.1,21.1.266"})
+    @CsvSource({"fabric-loader,1.20.1,0.16.10", "neoforge,1.21.1,21.1.266",
+            "forge,1.20.1,47.4.28", "quilt-loader,1.21.1,0.30.2"})
     void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion) throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         root = root.toRealPath();
@@ -112,9 +113,13 @@ class EndToEndTest {
         try (ZipOutputStream zip = new ZipOutputStream(output)) {
             String metadata = "{\"schemaVersion\":1,\"id\":\"modpackupdate\",\"version\":\"" + version + "\"}";
             String path = "fabric.mod.json";
-            if (loaderType.equals("neoforge")) {
-                path = "META-INF/neoforge.mods.toml";
+            if (loaderType.equals("neoforge") || loaderType.equals("forge")) {
+                path = loaderType.equals("forge") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";
                 metadata = "[[mods]]\nmodId=\"modpackupdate\"\nversion=\"" + version + "\"\n";
+            }
+            if (loaderType.equals("quilt-loader")) {
+                path = "quilt.mod.json";
+                metadata = "{\"schema_version\":1,\"quilt_loader\":{\"id\":\"modpackupdate\",\"version\":\"" + version + "\"}}";
             }
             zip.putNextEntry(new ZipEntry(path));
             zip.write(metadata.getBytes(StandardCharsets.UTF_8));

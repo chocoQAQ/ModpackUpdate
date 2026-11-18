@@ -19,7 +19,7 @@ try {
     }
     $ids = @{}
     foreach ($target in $targets) {
-        if ($target.platform -notin @('fabric', 'neoforge') -or
+        if ($target.platform -notin @('fabric', 'neoforge', 'forge', 'quilt') -or
             $target.adapter -ne $target.platform -or
             $target.minecraft -notmatch '^\d+\.\d+(\.\d+)?$' -or
             $target.id -cne "$($target.platform)-$($target.minecraft)" -or
@@ -33,12 +33,12 @@ try {
         exit 0
     }
     if ([string]::IsNullOrWhiteSpace($Platform)) {
-        $Platform = Read-Host 'Build platform (fabric / neoforge / all)'
+        $Platform = Read-Host 'Build platform (fabric / neoforge / forge / quilt / all)'
     }
     $Platform = $Platform.Trim().ToLowerInvariant()
     $Minecraft = $Minecraft.Trim()
-    if ($Platform -notin @('fabric', 'neoforge', 'all')) {
-        throw 'Usage: ./build.ps1 -Platform <fabric|neoforge|all> [-Minecraft <version> | -AllVersions] [Gradle arguments]'
+    if ($Platform -notin @('fabric', 'neoforge', 'forge', 'quilt', 'all')) {
+        throw 'Usage: ./build.ps1 -Platform <fabric|neoforge|forge|quilt|all> [-Minecraft <version> | -AllVersions] [Gradle arguments]'
     }
     if ($Minecraft -and ($AllVersions -or $Platform -eq 'all')) {
         throw '-Minecraft cannot be combined with -AllVersions or -Platform all.'

@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "${mixinMinVersion}",
+  "package": "dev.modpackupdate.forge.mixin",
+  "plugin": "dev.modpackupdate.forge.UpdateMixinPlugin",
+  "compatibilityLevel": "JAVA_${javaVersion}",
+  "mixins": [],
+  "client": []
+}

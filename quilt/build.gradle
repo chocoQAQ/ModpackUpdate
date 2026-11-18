@@ -1,0 +1,19 @@
+repositories { maven { url = 'https://maven.quiltmc.org/repository/release/' } }
+
+dependencies {
+    compileOnly "org.quiltmc:quilt-loader:${buildTarget.loaderVersion}"
+    testImplementation "org.quiltmc:quilt-loader:${buildTarget.loaderVersion}"
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+def metadata = [version: project.version.toString(), minecraft: buildTarget.minecraft,
+                loaderRange: buildTarget.loaderRange, javaVersion: buildTarget.java]
+processResources {
+    inputs.properties(metadata)
+    filesMatching('quilt.mod.json') { expand metadata }
+}
+test {
+    doFirst { systemProperty 'quilt.test.classpath', sourceSets.test.runtimeClasspath.asPath }
+}

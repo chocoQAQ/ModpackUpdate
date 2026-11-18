@@ -35,16 +35,23 @@ latest.json
 仓库提供本地 `seed` 命令，可从一个已经发布的固定版本生成出厂记录。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.1.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
 ```
 
 NeoForge 1.21.1 实例在末尾增加 `neoforge` 参数，并指定准确的加载器版本。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.1.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
 ```
 
-省略最后一个参数时按 `fabric-loader` 处理，兼容先前的 Fabric 命令。用于 NeoForge 的 `.mrpack` 索引声明 `dependencies.neoforge`，模组文件选择对应的 NeoForge 构建。
+省略最后一个参数时按 `fabric-loader` 处理。NeoForge 使用 `neoforge`，Forge 使用 `forge`，Quilt 使用 `quilt-loader`。参数中的游戏版本、加载器版本与索引依赖必须准确匹配。新增平台示例：
+
+```powershell
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
+```
+
+四个平台继续使用同一套静态发布协议；`.mrpack` 选择对应平台的 ModpackUpdate JAR，分别维护更新源。
 
 目标是作者的干净打包实例目录。命令从该版本的索引和 overrides 文件表生成哈希基线，仅下载元数据，不下载所有模组。`installed.json` 已存在时拒绝重建，避免误覆盖运行实例的差异记录。生成后将配置中的 `update-service-url` 改成 `latest.json`，把两个 JSON 放进发行包的 `overrides/ModpackUpdate/config/`，再次计算完整包大小与哈希。
 

@@ -20,6 +20,15 @@
       "adapter": "fabric"
     },
     {
+      "id": "fabric-1.21.4",
+      "platform": "fabric",
+      "minecraft": "1.21.4",
+      "loaderVersion": "0.16.10",
+      "loaderRange": ">=0.16.10",
+      "java": 21,
+      "adapter": "fabric"
+    },
+    {
       "id": "neoforge-1.21.1",
       "platform": "neoforge",
       "minecraft": "1.21.1",
@@ -33,6 +42,54 @@
         "mixin": "0.16.4+mixin.0.8.7",
         "mixinMinVersion": "0.8.7"
       }
+    },
+    {
+      "id": "neoforge-1.21.4",
+      "platform": "neoforge",
+      "minecraft": "1.21.4",
+      "loaderVersion": "21.4.161",
+      "loaderRange": "[21.4.161]",
+      "java": 21,
+      "adapter": "neoforge",
+      "dependencies": {
+        "fml": "6.0.18",
+        "languageLoaderRange": "[6,)",
+        "mixin": "0.15.2+mixin.0.8.7",
+        "mixinMinVersion": "0.8.7"
+      }
+    },
+    {
+      "id": "forge-1.20.1",
+      "platform": "forge",
+      "minecraft": "1.20.1",
+      "loaderVersion": "47.4.28",
+      "loaderRange": "[47.4.28]",
+      "java": 17,
+      "adapter": "forge",
+      "dependencies": {
+        "fml": "1.20.1-47.4.28",
+        "languageLoaderRange": "[47,)",
+        "mixin": "0.8.5",
+        "mixinMinVersion": "0.8.5"
+      }
+    },
+    {
+      "id": "quilt-1.20.1",
+      "platform": "quilt",
+      "minecraft": "1.20.1",
+      "loaderVersion": "0.30.2",
+      "loaderRange": ">=0.30.2",
+      "java": 17,
+      "adapter": "quilt"
+    },
+    {
+      "id": "quilt-1.21.1",
+      "platform": "quilt",
+      "minecraft": "1.21.1",
+      "loaderVersion": "0.30.2",
+      "loaderRange": ">=0.30.2",
+      "java": 21,
+      "adapter": "quilt"
     }
   ]
 }

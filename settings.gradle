@@ -15,7 +15,7 @@ manifest.targets.each { target ->
             throw new GradleException("Build target is missing a string field: ${key}")
         }
     }
-    if (!(target.platform in ['fabric', 'neoforge']) || target.adapter != target.platform ||
+    if (!(target.platform in ['fabric', 'neoforge', 'forge', 'quilt']) || target.adapter != target.platform ||
             !(target.minecraft ==~ /[0-9]+\.[0-9]+(?:\.[0-9]+)?/) ||
             target.id != "${target.platform}-${target.minecraft}") {
         throw new GradleException("Unsupported target or adapter: ${target.id}")
@@ -24,8 +24,8 @@ manifest.targets.each { target ->
     if (!(target.java instanceof Integer) || target.java < 17) {
         throw new GradleException("Target ${target.id} requires Java 17 or newer")
     }
-    if (target.platform == 'neoforge') {
-        if (target.java < 21) throw new GradleException('The current NeoForge adapter requires Java 21 or newer')
+    if (target.platform in ['neoforge', 'forge']) {
+        if (target.platform == 'neoforge' && target.java < 21) throw new GradleException('The current NeoForge adapter requires Java 21 or newer')
         ['fml', 'languageLoaderRange', 'mixin', 'mixinMinVersion'].each { key ->
             if (!(target.dependencies?.get(key) instanceof String) || !target.dependencies[key].trim()) {
                 throw new GradleException("Target ${target.id} is missing dependencies.${key}")

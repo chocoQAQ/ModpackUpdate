@@ -1,6 +1,6 @@
 # ModpackUpdate
 
-**预览版 · 0.3.0-preview.1（开发中）**
+**预览版 · 0.3.0-preview.2（开发中）**
 
 ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrinth `.mrpack` 格式。游戏启动时检查新版，玩家确认后退出游戏，由独立更新程序完成安装。离线、没有更新或选择跳过时继续启动游戏。
 
@@ -9,8 +9,10 @@ ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrin
 | 平台 | Minecraft | 加载器 | Java |
 | --- | --- | --- | --- |
 | Fabric | 1.20.1 | Fabric Loader 0.16.10+ | 17+ |
-| Fabric | 1.21.1 | Fabric Loader 0.16.10+ | 21+ |
-| NeoForge | 1.21.1 | NeoForge 21.1.266 | 21+ |
+| Fabric | 1.21.1 / 1.21.4 | Fabric Loader 0.16.10+ | 21+ |
+| NeoForge | 1.21.1 / 1.21.4 | 分别为 21.1.266 / 21.4.161 | 21+ |
+| Forge | 1.20.1 | Forge 47.4.28 | 17+ |
+| Quilt | 1.20.1 / 1.21.1 | Quilt Loader 0.30.2+ | 分别为 17+ / 21+ |
 
 下载对应平台的 JAR，放入实例的 `mods/` 文件夹。整合包作者在 `ModpackUpdate/config/config.json` 中填写更新地址、包标识并启用更新，首次生成的配置默认关闭。更新完成后，从启动器重新启动游戏。 [下载预览版](https://github.com/chocoQAQ/ModpackUpdate/releases)
 

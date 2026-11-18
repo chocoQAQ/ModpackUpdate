@@ -98,14 +98,16 @@ final class Protocol {
         return result;
     }
 
+    static final List<String> LOADERS = List.of("fabric-loader", "neoforge", "forge", "quilt-loader");
+
     static void validateDependencies(JsonObject dependencies, String minecraft, String loader, String loaderType) throws IOException {
-        if (!List.of("fabric-loader", "neoforge").contains(loaderType)) throw new IOException("不支持的加载器 " + loaderType);
+        if (!LOADERS.contains(loaderType)) throw new IOException("不支持的加载器 " + loaderType);
         if (dependencies == null || !dependencies.has("minecraft") || !dependencies.has(loaderType)
                 || !minecraft.equals(dependencies.get("minecraft").getAsString())
                 || !loader.equals(dependencies.get(loaderType).getAsString())) {
             throw new IOException("目标 Minecraft / " + loaderType + " 版本与当前实例不同，请先通过启动器安装对应版本");
         }
-        for (String other : List.of("fabric-loader", "neoforge", "forge", "quilt-loader")) {
+        for (String other : LOADERS) {
             if (!other.equals(loaderType) && dependencies.has(other)) throw new IOException("整合包包含不匹配的加载器 " + other);
         }
     }

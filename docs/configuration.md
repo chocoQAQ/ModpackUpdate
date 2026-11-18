@@ -1,6 +1,6 @@
 # 配置文件说明
 
-本文对应 ModpackUpdate 0.3.0-preview.1，适用于 Fabric 1.20.1 / 1.21.1 与 NeoForge 21.1.266 / Minecraft 1.21.1。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
+本文对应 ModpackUpdate 0.3.0-preview.2，适用于 Fabric、NeoForge、Forge 和 Quilt，具体游戏与加载器版本见 [构建目标](building.md)。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
 
 ## 文件位置与生效时机
 
@@ -178,6 +178,6 @@
 | 全选后某个设置仍被保留 | 检查 `protected-paths` 中是否包含该文件或上级目录 |
 | 开启删除选项后仍有 `.disable` 文件 | `.disable` 用于禁用清单中消失的旧模组，覆盖备份按单独规则清理 |
 | 关闭更新后仍进入恢复窗口 | 查看是否存在上次安装留下的事务记录，完成恢复后再重新启动 |
-| 发现新版，游戏退出后提示版本不匹配 | 核对索引声明的 Minecraft、加载器类型和版本是否与实例完全一致，NeoForge 对应 `dependencies.neoforge` |
+| 发现新版，游戏退出后提示版本不匹配 | 核对索引声明的 Minecraft、加载器类型和版本是否与实例完全一致，各平台依赖字段见 [发布协议](publishing-protocol.md) |
 
 首次发行时将 `config.json` 和生成的 `installed.json` 放进 `.mrpack` 的 `overrides/ModpackUpdate/config/`。已有实例的这两个文件由本地管理，后续发布中的同名配置会被保留目录规则跳过。 [打包流程](packaging.md)

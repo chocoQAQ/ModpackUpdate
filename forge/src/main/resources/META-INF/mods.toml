@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="${languageLoaderRange}"
+license="All Rights Reserved"
+
+[[mods]]
+modId="modpackupdate"
+version="${version}"
+displayName="ModpackUpdate"
+displayTest="IGNORE_ALL_VERSION"
+description='''Checks Modrinth modpack updates early and hands installation to an independent updater.'''
+
+[[dependencies.modpackupdate]]
+modId="forge"
+mandatory=true
+versionRange="${loaderRange}"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.modpackupdate]]
+modId="minecraft"
+mandatory=true
+versionRange="[${minecraft}]"
+ordering="NONE"
+side="BOTH"
+
+[features.modpackupdate]
+javaVersion="[${javaVersion},)"

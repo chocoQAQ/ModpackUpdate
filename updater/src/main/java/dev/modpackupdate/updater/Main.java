@@ -22,7 +22,7 @@ public final class Main {
             } else if ((args.length == 6 || args.length == 7) && args[0].equals("check")) {
                 code = check(args);
             } else {
-                System.err.println("Usage: java -jar updater.jar seed <instance> <release-url> <pack-id> <minecraft> <loader-version> [fabric-loader|neoforge]");
+                System.err.println("Usage: java -jar updater.jar seed <instance> <release-url> <pack-id> <minecraft> <loader-version> [fabric-loader|neoforge|forge|quilt-loader]");
                 code = 2;
             }
         } catch (Exception e) { e.printStackTrace(); code = 1; }
@@ -170,7 +170,7 @@ public final class Main {
     }
     private static String loaderType(String[] args) throws IOException {
         String type = args.length == 7 ? args[6] : "fabric-loader";
-        if (!type.equals("fabric-loader") && !type.equals("neoforge")) throw new IOException("不支持的加载器 " + type);
+        if (!Protocol.LOADERS.contains(type)) throw new IOException("不支持的加载器 " + type);
         return type;
     }
 

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "quilt_loader": {
+    "group": "dev.modpackupdate",
+    "id": "modpackupdate",
+    "version": "${version}",
+    "metadata": {
+      "name": "ModpackUpdate",
+      "description": "Checks Modrinth modpack updates before normal mod initialization."
+    },
+    "intermediate_mappings": "net.fabricmc:intermediary",
+    "entrypoints": { "pre_launch": "dev.modpackupdate.quilt.UpdatePreLaunch" },
+    "depends": [
+      { "id": "quilt_loader", "versions": "${loaderRange}" },
+      { "id": "minecraft", "versions": "${minecraft}" },
+      { "id": "java", "versions": ">=${javaVersion}" }
+    ]
+  },
+  "minecraft": { "environment": "client" }
+}
