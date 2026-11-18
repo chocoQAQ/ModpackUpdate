@@ -1,6 +1,6 @@
 # ModpackUpdate
 
-**预览版 · 0.3.0-preview.2（开发中）**
+**预览版 · 0.3.0-preview.2**
 
 ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrinth `.mrpack` 格式。游戏启动时检查新版，玩家确认后退出游戏，由独立更新程序完成安装。离线、没有更新或选择跳过时继续启动游戏。
 
