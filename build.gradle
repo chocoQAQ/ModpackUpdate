@@ -53,6 +53,7 @@ targets.each { target ->
         tasks.named('test') {
             useJUnitPlatform()
             dependsOn tasks.named('jar')
+            inputs.file(tasks.named('jar').flatMap { it.archiveFile })
             doFirst {
                 systemProperty 'target.mod.jar', tasks.jar.archiveFile.get().asFile.absolutePath
                 systemProperty 'target.version', project.version.toString()

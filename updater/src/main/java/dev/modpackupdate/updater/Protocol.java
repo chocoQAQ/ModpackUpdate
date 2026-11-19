@@ -19,14 +19,39 @@ import java.util.zip.ZipFile;
 final class Protocol {
     private final Downloads downloads;
     private final Path cache;
+    private FullPackFallback fallback;
     Protocol(Downloads downloads, Path cache) { this.downloads = downloads; this.cache = cache; }
 
     Models.Release release(String url, String packId) throws Exception {
         Path file = cache.resolve("release.json");
-        downloads.fetch(url, file, 16 * 1024 * 1024);
+        try { downloads.fetch(url, file, 16 * 1024 * 1024); }
+        catch (InterruptedException e) { throw e; }
+        catch (Exception e) { throw new ReleaseUnavailableException(e); }
         Models.Release release = FilesSupport.read(file, Models.Release.class);
         validateRelease(release, packId);
         return release;
+    }
+
+    private static final class ReleaseUnavailableException extends IOException {
+        ReleaseUnavailableException(Exception cause) { super("无法获取更新接口清单", cause); }
+    }
+
+    boolean usingFallback() { return fallback != null; }
+
+    Models.Release findUpdate(Models.Config config, Models.Installed installed, Path root,
+                              String minecraft, String loader, String loaderType) throws Exception {
+        fallback = null;
+        try {
+            Models.Release release = release(config.updateServiceUrl, config.packId);
+            if (release.releaseId() <= installed.releaseId
+                    || (installed.fullPackFallback && release.version().equals(installed.version))) return null;
+            return release;
+        } catch (ReleaseUnavailableException unavailable) {
+            if (config.fullPackUrl == null || config.fullPackUrl.isBlank()) throw unavailable;
+            System.out.println("更新接口清单不可用，检查完整整合包兜底源。");
+            fallback = FullPackFallback.load(downloads, cache, config, installed, root, minecraft, loader, loaderType);
+            return fallback.release().version().equals(installed.version) ? null : fallback.release();
+        }
     }
 
     static void validateRelease(Models.Release release, String packId) throws IOException {
@@ -54,12 +79,17 @@ final class Protocol {
     }
 
     Map<String, Models.Target> targets(Models.Release release, Path root, String minecraft, String loader, String loaderType) throws Exception {
+        if (fallback != null) return fallback.targets();
         Path index;
         try { index = downloads.artifact(release.index(), cache); }
         catch (Exception e) {
             Path pack = downloads.artifact(release.fullPack(), cache);
             index = extract(pack, "modrinth.index.json", release.index().sha512(), release.index().size());
         }
+        return parseTargets(release, root, minecraft, loader, loaderType, index);
+    }
+
+    static Map<String, Models.Target> parseTargets(Models.Release release, Path root, String minecraft, String loader, String loaderType, Path index) throws Exception {
         JsonObject json = JsonParser.parseString(Files.readString(index)).getAsJsonObject();
         if (json.get("formatVersion").getAsInt() != 1 || !json.get("game").getAsString().equals("minecraft")) {
             throw new IOException("只支持 Modrinth formatVersion 1 / Minecraft");
@@ -117,6 +147,7 @@ final class Protocol {
     }
     Path stage(Models.Target target, Models.Release release) throws Exception {
         if (!target.override()) return downloads.verified(target.downloads(), target.sha512(), target.size(), cache);
+        if (fallback != null) return extract(fallback.archive(), fallback.entries().get(target.path()), target.sha512(), target.size());
         try {
             Path archive = downloads.artifact(release.overrides().archive(), cache);
             return extract(archive, target.path(), target.sha512(), target.size());

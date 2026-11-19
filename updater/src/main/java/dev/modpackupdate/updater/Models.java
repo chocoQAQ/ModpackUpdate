@@ -9,6 +9,7 @@ final class Models {
     static final class Config {
         boolean enable = false;
         String updateServiceUrl = "";
+        String fullPackUrl = "";
         String packId = "";
         boolean silentUpdate = false;
         boolean deleteReplacedMods = false;
@@ -26,6 +27,7 @@ final class Models {
         long releaseId = -1;
         String version = "uninitialized";
         String transactionId = "";
+        boolean fullPackFallback = false;
         Map<String, Baseline> files = new LinkedHashMap<>();
     }
     record Baseline(String sha512, String targetSha512, boolean retained, boolean optional) {

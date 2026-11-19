@@ -74,8 +74,8 @@ public final class Main {
             validateInstalled(root, installed, config.packId);
             Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");
             Protocol protocol = new Protocol(new Downloads(config.timeoutSeconds), cache);
-            Models.Release release = protocol.release(config.updateServiceUrl, config.packId);
-            if (release.releaseId() <= installed.releaseId) return 0;
+            Models.Release release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType);
+            if (release == null) return 0;
             if (!config.silentUpdate && !ui.confirm(installed, release)) return 0;
             ui.progress("正在等待游戏进程退出…");
             handoff(signal, parentId);
@@ -98,6 +98,7 @@ public final class Main {
             }
             ui.progress(UpdateUi.Stage.INSTALL, "安装文件并保存版本记录…", 0, 0);
             Models.Installed next = Planner.next(installed, release, targets, changes, selection.changes(), config);
+            next.fullPackFallback = protocol.usingFallback();
             installer.install(installed, next, selection.changes(), staged, selection.deleteReplacedMods());
             long retained = next.files.values().stream().filter(Models.Baseline::retained).count();
             ui.message("已更新至 " + release.version() + "。\n保留本地差异 " + retained + " 项。\n请从启动器重新启动游戏。", false);

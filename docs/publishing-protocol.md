@@ -135,3 +135,9 @@ NeoForge 21.1.266 的索引依赖部分如下。
 每个版本使用不可变 URL。先上传完整包、索引、overrides ZIP，再生成并上传当前版本元数据，最后原子切换 `latest.json`。保留旧版本元数据供已发行整合包生成初始基线。对同一 `release-id` 的内容修正应发布新编号。
 
 格式依据 [Modrinth Modpack Format](https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack)。
+
+## 不依赖接口清单的客户端兜底
+
+客户端可选配置 `full-pack-url`，在发布元数据 URL 下载失败时直接读取完整 `.mrpack`。此功能无需修改发布协议，也无需生成额外服务文件。配置留空时维持原行为；清单已获取但内容校验失败时不启用。详情见 [配置文档](configuration.md#完整整合包兜底)。
+
+该 URL 应持续提供最新、与当前实例游戏和加载器版本一致的包。兜底以包内 `versionId` 是否不同判断候选更新，不推算 `release-id` 或比较版本先后。`.mrpack` 内的客户端 overrides 本地生成 SHA-512 文件表；下载包只受 HTTPS 来源与 ZIP/路径/大小检查保护，没有接口提供的预期整包哈希。普通外部文件继续校验索引声明的哈希。

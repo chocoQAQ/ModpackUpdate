@@ -31,9 +31,10 @@ class EndToEndTest {
     @TempDir Path root;
 
     @ParameterizedTest
-    @CsvSource({"fabric-loader,1.20.1,0.16.10", "neoforge,1.21.1,21.1.266",
-            "forge,1.20.1,47.4.28", "quilt-loader,1.21.1,0.30.2"})
-    void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion) throws Exception {
+    @CsvSource({"fabric-loader,1.20.1,0.16.10,false", "neoforge,1.21.1,21.1.266,false",
+            "forge,1.20.1,47.4.28,false", "quilt-loader,1.21.1,0.30.2,false",
+            "fabric-loader,1.20.1,0.16.10,true", "neoforge,1.21.1,21.1.266,true"})
+    void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion, boolean fallback) throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         root = root.toRealPath();
         Path original = root.resolve("mods/ModpackUpdate.jar");
@@ -71,7 +72,20 @@ class EndToEndTest {
         config.enable = true;
         config.silentUpdate = true;
         config.packId = "test";
-        config.updateServiceUrl = base + "/latest";
+        config.updateServiceUrl = base + (fallback ? "/unavailable" : "/latest");
+        if (fallback) {
+            config.fullPackUrl = base + "/pack";
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+                zip.putNextEntry(new ZipEntry("modrinth.index.json"));
+                zip.write(Files.readAllBytes(indexFile));
+                zip.closeEntry();
+                zip.putNextEntry(new ZipEntry("overrides/mods/ModpackUpdate.jar"));
+                zip.write(Files.readAllBytes(payload));
+                zip.closeEntry();
+            }
+            responses.put("/pack", bytes.toByteArray());
+        }
         FilesSupport.write(root.resolve("ModpackUpdate/config/config.json"), config);
         Models.Installed installed = new Models.Installed();
         installed.packId = "test";
@@ -100,7 +114,8 @@ class EndToEndTest {
             assertEquals(0, game.exitValue(), Files.readString(root.resolve("game.log")));
             assertEquals(newHash, FilesSupport.hash(original));
             Models.Installed next = FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class);
-            assertEquals(2, next.releaseId);
+            assertEquals(fallback ? 1 : 2, next.releaseId);
+            assertEquals(fallback, next.fullPackFallback);
             assertEquals(oldHash, FilesSupport.hash(root.resolve("ModpackUpdate/1.0.0/" + next.transactionId + "/mods/ModpackUpdate.jar")));
         } finally {
             game.destroyForcibly();

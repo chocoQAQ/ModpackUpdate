@@ -35,20 +35,20 @@ latest.json
 仓库提供本地 `seed` 命令，可从一个已经发布的固定版本生成出厂记录。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.3.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
 ```
 
 NeoForge 1.21.1 实例在末尾增加 `neoforge` 参数，并指定准确的加载器版本。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.3.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
 ```
 
 省略最后一个参数时按 `fabric-loader` 处理。NeoForge 使用 `neoforge`，Forge 使用 `forge`，Quilt 使用 `quilt-loader`。参数中的游戏版本、加载器版本与索引依赖必须准确匹配。新增平台示例：
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.2.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.3.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.3.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
 ```
 
 四个平台继续使用同一套静态发布协议；`.mrpack` 选择对应平台的 ModpackUpdate JAR，分别维护更新源。
