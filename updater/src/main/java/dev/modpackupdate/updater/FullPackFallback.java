@@ -16,7 +16,7 @@ import java.util.zip.ZipFile;
 
 /** Derives a client installation plan from an author-configured .mrpack when release retrieval fails. */
 record FullPackFallback(Path archive, Models.Release release, Map<String, Models.Target> targets,
-                        Map<String, String> entries) {
+                        Map<String, String> entries, boolean sequenceKnown) {
     private static final long LIMIT = 20L * 1024 * 1024 * 1024;
 
     static FullPackFallback load(Downloads downloads, Path cache, Models.Config config, Models.Installed installed,
@@ -39,6 +39,7 @@ record FullPackFallback(Path archive, Models.Release release, Map<String, Models
             long expanded = 0;
             var enumeration = zip.entries();
             while (enumeration.hasMoreElements()) {
+                CheckSession.checkInterrupted();
                 ZipEntry entry = enumeration.nextElement();
                 if (!names.add(entry.getName()) || names.size() > 100_000) throw new IOException("ZIP 条目重复或过多");
                 if (!entry.isDirectory()) {
@@ -58,17 +59,32 @@ record FullPackFallback(Path archive, Models.Release release, Map<String, Models
             var json = JsonParser.parseString(Files.readString(index)).getAsJsonObject();
             String version = json.get("versionId").getAsString();
             if (!version.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}")) throw new IOException("整合包版本无效");
+            long releaseId = installed.releaseId;
+            ZipEntry metadata = zip.getEntry("modpackupdate.release.json");
+            boolean sequenceKnown = metadata != null;
+            if (metadata != null) {
+                if (metadata.isDirectory() || metadata.getSize() > 65536) throw new IOException("完整包发布元数据无效");
+                Models.PackRelease identity;
+                try (var input = zip.getInputStream(metadata)) {
+                    byte[] bytes = input.readNBytes(65537);
+                    if (bytes.length != metadata.getSize()) throw new IOException("完整包发布元数据大小无效");
+                    identity = FilesSupport.JSON.fromJson(new String(bytes, java.nio.charset.StandardCharsets.UTF_8), Models.PackRelease.class);
+                }
+                if (identity == null || identity.protocolVersion() != 1 || !config.packId.equals(identity.packId())
+                        || identity.releaseId() < 0 || !version.equals(identity.version())) throw new IOException("完整包发布身份不匹配");
+                releaseId = identity.releaseId();
+            }
             // Merge base overrides first, then the client overlay. Server overrides are never installed.
             var spellings = new LinkedHashMap<String, String>();
             for (String prefix : new String[]{"overrides/", "client-overrides/"}) {
                 var layer = new HashSet<String>();
                 var items = zip.entries();
                 while (items.hasMoreElements()) {
+                    CheckSession.checkInterrupted();
                     ZipEntry entry = items.nextElement();
                     if (entry.isDirectory() || !entry.getName().startsWith(prefix)) continue;
                     String path = entry.getName().substring(prefix.length());
                     FilesSupport.resolve(root, path);
-                    if (path.contains("//") || path.endsWith("/")) throw new IOException("非规范文件路径");
                     String lower = path.toLowerCase(Locale.ROOT);
                     String existing = spellings.putIfAbsent(lower, path);
                     if (!layer.add(lower) || (existing != null && !existing.equals(path))) throw new IOException("overrides 路径冲突");
@@ -83,6 +99,7 @@ record FullPackFallback(Path archive, Models.Release release, Map<String, Models
                     byte[] buffer = new byte[128 * 1024];
                     int length;
                     while ((length = input.read(buffer)) >= 0) {
+                        CheckSession.checkInterrupted();
                         total += length;
                         if (total > entry.getSize()) throw new IOException("ZIP 文件大小超限");
                         digest.update(buffer, 0, length);
@@ -93,10 +110,10 @@ record FullPackFallback(Path archive, Models.Release release, Map<String, Models
             }
             String announcement = "更新接口不可用，正在使用完整整合包兜底源。";
             if (json.has("summary") && !json.get("summary").isJsonNull()) announcement += "\n\n" + json.get("summary").getAsString();
-            var release = new Models.Release(1, config.packId, installed.releaseId, version, announcement,
+            var release = new Models.Release(1, config.packId, releaseId, version, announcement,
                     null, new Models.Overrides(!files.isEmpty(), null, files), null);
             var targets = Protocol.parseTargets(release, root, minecraft, loader, loaderType, index);
-            return new FullPackFallback(archive, release, targets, entries);
+            return new FullPackFallback(archive, release, targets, entries, sequenceKnown);
         } finally { Files.deleteIfExists(index); }
     }
 }

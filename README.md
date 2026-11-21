@@ -1,10 +1,12 @@
 # ModpackUpdate
 
-**预览版 · 0.3.0-preview.3**
+**预览版 · 0.3.0-preview.4**
 
 ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrinth `.mrpack` 格式。游戏启动时检查新版，玩家确认后退出游戏，由独立更新程序完成安装。离线、没有更新或选择跳过时继续启动游戏。
 
 支持接口不可用时从配置的完整 `.mrpack` 兜底更新、静默更新、文件冲突勾选、旧模组禁用和模组自身更新。默认保护键位、视频设置、存档和截图，并备份被覆盖的文件。配置、缓存和备份统一保存在游戏根目录的 `ModpackUpdate/` 下。
+
+完整包可携带统一发布编号以防来源切换时回退；无编号包需要人工确认。检查支持超时和跳过，独立更新器提供 `repair` 命令用于恢复及重新处理保留差异，详见配置文档。
 
 | 平台 | Minecraft | 加载器 | Java |
 | --- | --- | --- | --- |
@@ -22,5 +24,7 @@ ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrin
 - [更新发布协议](docs/publishing-protocol.md)
 - [整合包打包流程](docs/packaging.md)
 - [多版本构建说明](docs/building.md)
+- [main 分支实现说明（0.3.0-preview.2）](docs/implementation-main.md)
+- [main 分支代码审查（2026-11-19）](docs/review-main-2026-11-19.md)
 
 开发使用 `dev` 分支。运行 `./build.ps1 -ListTargets` 查看目标，`./build.ps1 -Platform fabric -Minecraft 1.21.1` 构建指定版本，`./build.ps1 all` 构建全部目标。完整构建需要 JDK 17 和 21，Gradle 自动选择编译与测试工具链。新版开发构建与已发布的预览版可能不同，以 Release 附件为准。

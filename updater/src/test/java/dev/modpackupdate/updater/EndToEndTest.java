@@ -116,6 +116,7 @@ class EndToEndTest {
             Models.Installed next = FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class);
             assertEquals(fallback ? 1 : 2, next.releaseId);
             assertEquals(fallback, next.fullPackFallback);
+            assertEquals(fallback, Files.exists(root.resolve("manual-confirm")), "Unnumbered fallback must require confirmation even in silent mode");
             assertEquals(oldHash, FilesSupport.hash(root.resolve("ModpackUpdate/1.0.0/" + next.transactionId + "/mods/ModpackUpdate.jar")));
         } finally {
             game.destroyForcibly();
@@ -157,7 +158,11 @@ class EndToEndTest {
         }
     }
     public static class AutoUpdater {
+        private static Path instance;
+        private static boolean repair;
         public static void main(String[] args) {
+            instance = Path.of(args[1]);
+            repair = args[0].equals("repair");
             new Timer(100, event -> {
                 for (Window window : Window.getWindows()) {
                     if (window.isShowing()) dismiss(window);
@@ -169,6 +174,13 @@ class EndToEndTest {
             for (Component component : container.getComponents()) {
                 if (component instanceof JOptionPane pane) pane.setValue(JOptionPane.OK_OPTION);
                 else if (component instanceof javax.swing.JButton button && "关闭".equals(button.getText())) button.doClick();
+                else if (component instanceof javax.swing.JButton button && "更新并退出游戏".equals(button.getText())) {
+                    try { Files.writeString(instance.resolve("manual-confirm"), "confirmed"); }
+                    catch (Exception e) { throw new RuntimeException(e); }
+                    button.doClick();
+                }
+                else if (component instanceof javax.swing.JButton button && "开始安装".equals(button.getText())) button.doClick();
+                else if (repair && component instanceof javax.swing.JButton button && "全选".equals(button.getText())) button.doClick();
                 else if (component instanceof Container child) dismiss(child);
             }
         }

@@ -19,6 +19,13 @@ final class Downloads {
     private final HttpClient client;
     private final int timeout;
     private final Set<Path> verifiedThisSession = new HashSet<>();
+    private volatile InputStream active;
+    private volatile boolean cancelled;
+    void cancel() {
+        cancelled = true;
+        InputStream input = active;
+        if (input != null) try { input.close(); } catch (IOException ignored) {}
+    }
     Downloads(int timeout) {
         this.timeout = Math.max(2, Math.min(timeout, 120));
         client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(this.timeout))
@@ -36,18 +43,25 @@ final class Downloads {
         } catch (IllegalArgumentException e) { throw new IOException("无效下载地址", e); }
     }
     void fetch(String url, Path destination, long limit) throws Exception {
+        checkCancelled();
         URI uri = allowed(url);
         Files.createDirectories(destination.getParent());
         for (int redirect = 0; redirect <= 5; redirect++) {
+            checkCancelled();
             HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(timeout))
                     .header("User-Agent", "ModpackUpdate/0.2.0").GET().build();
             HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream input = response.body()) {
+                active = input;
+                checkCancelled();
                 if (response.statusCode() >= 300 && response.statusCode() < 400) {
                     uri = allowed(uri.resolve(response.headers().firstValue("Location").orElseThrow()).toString());
                     continue;
                 }
                 if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode());
+                long expected = response.headers().firstValueAsLong("Content-Length").orElse(0);
+                if (expected > limit) throw new IOException("下载超过声明大小");
+                Storage.requireSpace(destination.getParent(), Math.max(0, expected));
                 // Bound body reads too: the HTTP request timeout alone does not cover a streamed body.
                 var watchdog = Executors.newSingleThreadScheduledExecutor();
                 var deadline = watchdog.schedule(() -> { try { input.close(); } catch (IOException ignored) {} },
@@ -57,15 +71,21 @@ final class Downloads {
                     long total = 0;
                     int length;
                     while ((length = input.read(buffer)) >= 0) {
+                        checkCancelled();
                         total += length;
                         if (total > limit) throw new IOException("下载超过声明大小");
+                        if (total / (4 * 1024 * 1024) != (total - length) / (4 * 1024 * 1024)) Storage.requireSpace(destination.getParent(), length);
                         output.write(buffer, 0, length);
                     }
                 } finally { deadline.cancel(false); watchdog.shutdownNow(); }
                 return;
-            }
+            } finally { active = null; }
         }
         throw new IOException("重定向过多");
+    }
+    private void checkCancelled() throws IOException {
+        CheckSession.checkInterrupted();
+        if (cancelled) throw new java.io.InterruptedIOException("下载已取消");
     }
     Path artifact(Models.Artifact artifact, Path cache) throws Exception {
         if (artifact == null || artifact.size() < 0 || artifact.size() > 20L * 1024 * 1024 * 1024) throw new IOException("无效下载产物");

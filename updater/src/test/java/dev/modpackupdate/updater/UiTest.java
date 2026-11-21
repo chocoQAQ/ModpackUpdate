@@ -21,6 +21,22 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class UiTest {
+    @Test void fallbackCheckCanBeSkippedWithoutAnInstallationDialog() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        var ui = new UpdateUi();
+        try {
+            ui.checking(() -> cancelled.set(true));
+            SwingUtilities.invokeAndWait(() -> {
+                Window window = java.util.Arrays.stream(Window.getWindows()).filter(Window::isShowing).findFirst().orElseThrow();
+                capture(window, "fallback-check.png");
+                click(window, "跳过检查");
+            });
+            assertTrue(cancelled.get());
+            ui.closeChecking();
+            SwingUtilities.invokeAndWait(() -> assertTrue(java.util.Arrays.stream(Window.getWindows()).noneMatch(Window::isShowing)));
+        } finally { ui.closeChecking(); }
+    }
     @Test void confirmationProgressAndCompletionWork() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         UpdateUi ui = new UpdateUi();
@@ -30,7 +46,7 @@ class UiTest {
             installed.version = "1.4.0";
             Models.Release release = new Models.Release(1, "adventure", 2, "1.5.0",
                     "更新内容\n\n• 更新部分模组\n• 优化启动速度\n• 修复配置冲突", null, null, null);
-            var confirmation = executor.submit(() -> ui.confirm(installed, release));
+            var confirmation = executor.submit(() -> ui.confirm(installed, release, true));
             Window confirm = awaitDialog("发现更新");
             SwingUtilities.invokeAndWait(() -> { capture(confirm, "confirmation.png"); click(confirm, "跳过并继续游戏"); });
             assertFalse(confirmation.get(5, TimeUnit.SECONDS));

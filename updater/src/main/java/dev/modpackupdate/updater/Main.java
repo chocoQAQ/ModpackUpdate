@@ -21,8 +21,16 @@ public final class Main {
                 seed(args);
             } else if ((args.length == 6 || args.length == 7) && args[0].equals("check")) {
                 code = check(args);
+            } else if ((args.length == 4 || args.length == 5) && args[0].equals("repair")) {
+                Path root = Path.of(args[1]).toRealPath();
+                Path runtime = FilesSupport.resolve(root, "ModpackUpdate/runtime");
+                Files.createDirectories(runtime);
+                code = check(new String[]{"repair", root.toString(), "0",
+                        runtime.resolve("handoff-" + java.util.UUID.randomUUID()).toString(), args[2], args[3],
+                        args.length == 5 ? args[4] : "fabric-loader"});
             } else {
                 System.err.println("Usage: java -jar updater.jar seed <instance> <release-url> <pack-id> <minecraft> <loader-version> [fabric-loader|neoforge|forge|quilt-loader]");
+                System.err.println("       java -jar updater.jar repair <instance> <minecraft> <loader-version> [fabric-loader|neoforge|forge|quilt-loader]");
                 code = 2;
             }
         } catch (Exception e) { e.printStackTrace(); code = 1; }
@@ -40,6 +48,7 @@ public final class Main {
         }
     }
     private static int checkLocked(Path root, String[] args) throws Exception {
+        boolean standalone = args[0].equals("repair");
         long parentId = Long.parseLong(args[2]);
         Path requestedSignal = Path.of(args[3]).toAbsolutePath().normalize();
         Path signal = requestedSignal.getParent().toRealPath().resolve(requestedSignal.getFileName());
@@ -50,15 +59,19 @@ public final class Main {
         boolean recovery = installer.pending();
         UpdateUi ui = new UpdateUi();
         boolean handedOff = false;
+        Models.Config config = null;
+        Path phase = signal.resolveSibling(signal.getFileName() + ".phase");
         try {
             if (otherGameRunning(root, parentId)) {
                 if (recovery) return 20;
                 System.out.println("同一实例的另一个游戏进程仍在运行，本次跳过检查");
+                if (standalone) ui.message("游戏仍在运行，请关闭此实例后再修复。", true);
                 return 0;
             }
             if (recovery) {
                 ui.progress("恢复上次中断的安装，正在等待游戏进程退出…");
-                handoff(signal, parentId);
+                Files.writeString(phase, "interactive");
+                if (!standalone) handoff(signal, parentId);
                 handedOff = true;
                 installer.recover();
                 ui.message("已恢复上次安装状态，请从启动器重新启动游戏。", false);
@@ -66,24 +79,43 @@ public final class Main {
             }
             Path configFile = FilesSupport.resolve(root, "ModpackUpdate/config/config.json");
             if (!Files.exists(configFile)) FilesSupport.write(configFile, new Models.Config());
-            Models.Config config = FilesSupport.read(configFile, Models.Config.class);
-            if (!config.enable) return 0;
+            config = FilesSupport.read(configFile, Models.Config.class);
+            if (!config.enable && !standalone) return 0;
             if (config.protectedPaths == null) throw new IOException("protected-paths 必须是数组");
             Path state = FilesSupport.resolve(root, "ModpackUpdate/config/installed.json");
             Models.Installed installed = Files.exists(state) ? FilesSupport.read(state, Models.Installed.class) : new Models.Installed();
             validateInstalled(root, installed, config.packId);
             Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");
-            Protocol protocol = new Protocol(new Downloads(config.timeoutSeconds), cache);
-            Models.Release release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType);
-            if (release == null) return 0;
-            if (!config.silentUpdate && !ui.confirm(installed, release)) return 0;
+            Storage.cleanup(root, config.cacheMaxMib, config.backupRetentionCount);
+            Downloads downloads = new Downloads(config.timeoutSeconds);
+            Protocol protocol = new Protocol(downloads, cache);
+            Models.Release release;
+            try (CheckSession check = new CheckSession(downloads, config.checkTimeoutSeconds)) {
+                Files.writeString(phase, Long.toString(check.deadline));
+                protocol.onFallback(() -> {
+                    try { ui.checking(check::cancel); }
+                    catch (Exception e) { throw new IllegalStateException("无法显示检查窗口", e); }
+                });
+                release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType, standalone);
+                CheckSession.checkInterrupted();
+                if (check.cancelled()) return 0;
+            } finally {
+                Files.writeString(phase, "interactive");
+                ui.closeChecking();
+            }
+            if (release == null) {
+                if (standalone) ui.message("更新源没有可修复的当前版本或更新版本。", false);
+                return 0;
+            }
+            if ((!config.silentUpdate || protocol.requiresConfirmation() || standalone)
+                    && !ui.confirm(installed, release, protocol.requiresConfirmation())) return 0;
             ui.progress("正在等待游戏进程退出…");
-            handoff(signal, parentId);
+            if (!standalone) handoff(signal, parentId);
             handedOff = true;
             ui.progress("读取整合包索引并检查游戏版本…");
             Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5], loaderType);
             ui.progress("检查即将变更的文件…");
-            var changes = Planner.plan(root, config, installed, targets);
+            var changes = Planner.plan(root, config, installed, targets, standalone);
             UpdateUi.Selection selection = ui.choose(changes, config);
             if (selection == null) return 0;
             Map<String, Path> staged = new LinkedHashMap<>();
@@ -96,21 +128,38 @@ public final class Main {
                 staged.put(change.path(), protocol.stage(change.target(), release));
                 ui.progress(UpdateUi.Stage.DOWNLOAD, "已就绪 · " + change.path(), ++number, downloadCount);
             }
+            var selected = installer.reconcileSelection(changes, selection.changes(), staged);
+            if (selected.size() != selection.changes().size()) {
+                ui.message("有新版模组未被采用，已同时保留 " + (selection.changes().size() - selected.size())
+                        + " 个无法确认已被替代的旧模组，避免只禁用旧版。", false);
+            }
             ui.progress(UpdateUi.Stage.INSTALL, "安装文件并保存版本记录…", 0, 0);
-            Models.Installed next = Planner.next(installed, release, targets, changes, selection.changes(), config);
+            Models.Installed next = Planner.next(installed, release, targets, changes, selected, config);
             next.fullPackFallback = protocol.usingFallback();
-            installer.install(installed, next, selection.changes(), staged, selection.deleteReplacedMods());
+            next.fullPackSequenceKnown = protocol.sequenceKnown();
+            installer.install(installed, next, selected, staged, selection.deleteReplacedMods());
             long retained = next.files.values().stream().filter(Models.Baseline::retained).count();
-            ui.message("已更新至 " + release.version() + "。\n保留本地差异 " + retained + " 项。\n请从启动器重新启动游戏。", false);
+            ui.message((retained == 0 ? "已完整安装 " : "已处理版本（保留差异） ") + release.version()
+                    + "。\n保留本地差异 " + retained + " 项。\n可使用 repair 命令重新检查。\n请从启动器重新启动游戏。", false);
             return 0;
         } catch (Exception e) {
             e.printStackTrace();
-            if (handedOff) {
+            if (!handedOff && (e instanceof java.io.InterruptedIOException || e instanceof InterruptedException)) return recovery ? 20 : 0;
+            if (handedOff || standalone) {
                 try { ui.message("更新失败\n" + e.getMessage() + "\n详细记录见 ModpackUpdate/runtime/ 下的日志。", true); }
                 catch (Exception unavailable) { unavailable.printStackTrace(); }
             }
             return recovery ? 20 : 1;
-        } finally { ui.close(); }
+        } finally {
+            try { ui.closeChecking(); ui.close(); }
+            finally {
+                Files.deleteIfExists(phase);
+                if (config != null && !installer.pending()) {
+                    try { Storage.cleanup(root, config.cacheMaxMib, config.backupRetentionCount); }
+                    catch (Exception e) { System.err.println("缓存清理未完成: " + e); }
+                }
+            }
+        }
     }
     private static void handoff(Path signal, long parentId) throws Exception {
         ProcessHandle parent = ProcessHandle.of(parentId).orElseThrow(() -> new IOException("游戏进程已经退出"));
@@ -136,6 +185,7 @@ public final class Main {
     private static void validateInstalled(Path root, Models.Installed installed, String packId) throws IOException {
         if (installed.schemaVersion != 1 || installed.files == null || installed.packId == null
                 || (!installed.packId.isEmpty() && !installed.packId.equals(packId))) throw new IOException("本地安装记录不匹配");
+        FilesSupport.byPath(installed.files);
         for (var entry : installed.files.entrySet()) {
             FilesSupport.resolve(root, entry.getKey());
             if (entry.getValue() == null) throw new IOException("无效文件基线");

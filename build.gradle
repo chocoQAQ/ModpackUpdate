@@ -70,7 +70,7 @@ def distribution = { String taskName, List selected, String output ->
     tasks.register(taskName, Sync) {
         group = 'build'
         description = "Builds and tests ${selected.collect { it.id }.join(', ')}."
-        dependsOn ':updater:build'
+        dependsOn ':bootstrap:check', ':updater:build'
         from project(':updater').tasks.named('jar')
         selected.each { target ->
             dependsOn ":${target.id}:build"

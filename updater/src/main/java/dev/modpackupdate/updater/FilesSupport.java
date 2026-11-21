@@ -16,26 +16,34 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 
 final class FilesSupport {
     static final Gson JSON = new GsonBuilder().setPrettyPrinting().setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_DASHES).create();
-    static Path resolve(Path root, String relative) throws IOException {
+    static Path relative(String relative) throws IOException {
         if (relative == null || relative.isBlank() || relative.contains("\\") || relative.contains(":")) {
             throw new IOException("无效路径 " + relative);
+        }
+        // Check the original spelling before Path.of() can collapse separators.
+        for (String name : relative.split("/", -1)) {
+            if (name.isEmpty() || name.equals("..") || name.equals(".") || name.endsWith(".") || name.endsWith(" ")
+                    || name.matches("(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\..*)?")) {
+                throw new IOException("不安全的路径 " + relative);
+            }
         }
         Path local;
         try { local = Path.of(relative); }
         catch (InvalidPathException e) { throw new IOException("无效路径 " + relative, e); }
         if (local.isAbsolute()) throw new IOException("禁止绝对路径 " + relative);
-        for (Path segment : local) {
-            String name = segment.toString();
-            if (name.equals("..") || name.equals(".") || name.endsWith(".") || name.endsWith(" ")
-                    || name.matches("(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\..*)?")) {
-                throw new IOException("不安全的路径 " + relative);
-            }
-        }
+        return local;
+    }
+    static Path resolve(Path root, String relative) throws IOException {
+        Path local = relative(relative);
         Path destination = root.resolve(local).normalize();
         if (!destination.startsWith(root) || destination.equals(root)) throw new IOException("路径超出实例目录");
         Path cursor = root;
@@ -45,9 +53,35 @@ final class FilesSupport {
             if (Files.exists(cursor, LinkOption.NOFOLLOW_LINKS) && !cursor.toRealPath().startsWith(root.toRealPath())) {
                 throw new IOException("路径指向实例外部 " + cursor);
             }
+            if (!cursor.equals(destination) && Files.exists(cursor, LinkOption.NOFOLLOW_LINKS) && !Files.isDirectory(cursor)) {
+                throw new IOException("父路径不是目录 " + cursor);
+            }
         }
         return destination;
     }
+    static void validateFilePaths(Collection<String> paths) throws IOException {
+        var names = new HashSet<String>();
+        for (String path : paths) {
+            relative(path);
+            if (!names.add(path.toLowerCase(Locale.ROOT))) throw new IOException("重复文件路径 " + path);
+        }
+        for (String path : names) {
+            for (int slash = path.lastIndexOf('/'); slash >= 0; slash = path.lastIndexOf('/', slash - 1)) {
+                if (names.contains(path.substring(0, slash))) throw new IOException("文件与目录路径冲突 " + path);
+            }
+        }
+    }
+    static <T> Map<Path, T> byPath(Map<String, T> files) throws IOException {
+        Map<Path, T> result = new LinkedHashMap<>();
+        for (var entry : files.entrySet()) {
+            Path path = relative(entry.getKey());
+            // Path equality follows the platform provider, including Windows case-insensitivity.
+            if (result.containsKey(path)) throw new IOException("重复文件路径 " + entry.getKey());
+            result.put(path, entry.getValue());
+        }
+        return result;
+    }
+    static String portable(Path path) { return path.toString().replace('\\', '/'); }
     static boolean managedMod(String path) {
         return path.startsWith("mods/") && path.endsWith(".jar");
     }
@@ -66,7 +100,10 @@ final class FilesSupport {
             try (InputStream input = Files.newInputStream(path)) {
                 byte[] buffer = new byte[128 * 1024];
                 int length;
-                while ((length = input.read(buffer)) >= 0) digest.update(buffer, 0, length);
+            while ((length = input.read(buffer)) >= 0) {
+                CheckSession.checkInterrupted();
+                digest.update(buffer, 0, length);
+            }
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
@@ -94,6 +131,15 @@ final class FilesSupport {
         Files.createDirectories(to.getParent());
         try { Files.move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
         catch (AtomicMoveNotSupportedException e) { Files.move(from, to, StandardCopyOption.REPLACE_EXISTING); }
+        syncDirectory(to.getParent());
+    }
+    static void syncFile(Path file) throws IOException {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) { channel.force(true); }
+    }
+    static void syncDirectory(Path directory) {
+        // Some providers (notably Windows) do not expose directory fsync through FileChannel.
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) { channel.force(true); }
+        catch (IOException | UnsupportedOperationException ignored) {}
     }
     private FilesSupport() {}
 }

@@ -20,6 +20,8 @@ final class Protocol {
     private final Downloads downloads;
     private final Path cache;
     private FullPackFallback fallback;
+    private boolean confirmationRequired;
+    private Runnable fallbackStarted = () -> {};
     Protocol(Downloads downloads, Path cache) { this.downloads = downloads; this.cache = cache; }
 
     Models.Release release(String url, String packId) throws Exception {
@@ -37,21 +39,40 @@ final class Protocol {
     }
 
     boolean usingFallback() { return fallback != null; }
+    boolean sequenceKnown() { return fallback == null || fallback.sequenceKnown(); }
+    boolean requiresConfirmation() { return confirmationRequired; }
+    void onFallback(Runnable action) { fallbackStarted = action; }
 
     Models.Release findUpdate(Models.Config config, Models.Installed installed, Path root,
                               String minecraft, String loader, String loaderType) throws Exception {
+        return findUpdate(config, installed, root, minecraft, loader, loaderType, false);
+    }
+
+    Models.Release findUpdate(Models.Config config, Models.Installed installed, Path root,
+                              String minecraft, String loader, String loaderType, boolean repair) throws Exception {
         fallback = null;
+        confirmationRequired = false;
         try {
             Models.Release release = release(config.updateServiceUrl, config.packId);
-            if (release.releaseId() <= installed.releaseId
-                    || (installed.fullPackFallback && release.version().equals(installed.version))) return null;
-            return release;
+            return candidate(release, installed, true, repair);
         } catch (ReleaseUnavailableException unavailable) {
             if (config.fullPackUrl == null || config.fullPackUrl.isBlank()) throw unavailable;
+            CheckSession.checkInterrupted();
             System.out.println("更新接口清单不可用，检查完整整合包兜底源。");
+            fallbackStarted.run();
             fallback = FullPackFallback.load(downloads, cache, config, installed, root, minecraft, loader, loaderType);
-            return fallback.release().version().equals(installed.version) ? null : fallback.release();
+            return candidate(fallback.release(), installed, fallback.sequenceKnown(), repair);
         }
+    }
+
+    private Models.Release candidate(Models.Release release, Models.Installed installed, boolean numbered, boolean repair) {
+        boolean sameVersion = release.version().equals(installed.version);
+        boolean unknownInstalled = installed.fullPackFallback && !installed.fullPackSequenceKnown;
+        confirmationRequired = !numbered || unknownInstalled;
+        if (repair && sameVersion && (!numbered || release.releaseId() >= installed.releaseId)) return release;
+        if (numbered && release.releaseId() <= installed.releaseId) return null;
+        if (sameVersion && (usingFallback() || installed.fullPackFallback)) return null;
+        return release;
     }
 
     static void validateRelease(Models.Release release, String packId) throws IOException {
@@ -99,6 +120,7 @@ final class Protocol {
         Map<String, Models.Target> result = new LinkedHashMap<>();
         Set<String> paths = new HashSet<>();
         for (var element : json.getAsJsonArray("files")) {
+            CheckSession.checkInterrupted();
             JsonObject file = element.getAsJsonObject();
             String path = file.get("path").getAsString();
             validatePath(root, paths, path);
@@ -125,6 +147,7 @@ final class Protocol {
             }
             result.put(file.path(), new Models.Target(file.path(), file.sha512(), file.size(), List.of(), true, false));
         }
+        FilesSupport.validateFilePaths(result.keySet());
         return result;
     }
 
@@ -164,6 +187,7 @@ final class Protocol {
         Path destination = cache.resolve(hash);
         if (Files.isRegularFile(destination) && Files.size(destination) == size && FilesSupport.hash(destination).equals(hash)) return destination;
         Path part = cache.resolve(hash + ".extract");
+        Storage.requireSpace(cache, size);
         try (ZipFile zip = new ZipFile(archive.toFile())) {
             ZipEntry entry = zip.getEntry(name);
             if (entry == null || entry.isDirectory() || entry.getSize() != size) throw new IOException("压缩包缺少文件或大小不一致 " + name);

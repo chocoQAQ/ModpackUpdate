@@ -21,6 +21,7 @@ final class UpdateUi {
     private static final Color TINT = new Color(0xECECEC);
     private static final Font BODY = new Font(System.getProperty("os.name", "").startsWith("Windows") ? "Microsoft YaHei UI" : Font.DIALOG, Font.PLAIN, 14);
     private JFrame progress;
+    private JFrame checking;
     private JTextArea status;
     private JLabel phase;
     private JProgressBar bar;
@@ -50,6 +51,37 @@ final class UpdateUi {
     }
 
     boolean confirm(Models.Installed installed, Models.Release release) throws Exception {
+        return confirm(installed, release, false);
+    }
+
+    void checking(Runnable cancel) throws Exception {
+        ui(() -> {
+            checking = new JFrame("ModpackUpdate · 检查完整包");
+            checking.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+            checking.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosing(java.awt.event.WindowEvent event) { cancel.run(); }
+            });
+            JPanel content = stack();
+            content.add(heading("检查完整整合包", "更新接口暂不可用，正在下载并检查备用整合包。"));
+            content.add(Box.createVerticalStrut(20));
+            content.add(note("可以跳过本次检查；尚未修改游戏文件。"));
+            JButton skip = button("跳过检查", false);
+            skip.addActionListener(event -> { skip.setEnabled(false); cancel.run(); });
+            content.add(Box.createVerticalStrut(20));
+            content.add(skip);
+            checking.setContentPane(shell(content));
+            size(checking, 660);
+            checking.setLocationRelativeTo(null);
+            checking.setVisible(true);
+            return null;
+        });
+    }
+
+    void closeChecking() throws Exception {
+        if (checking != null) ui(() -> { checking.dispose(); checking = null; return null; });
+    }
+
+    boolean confirm(Models.Installed installed, Models.Release release, boolean uncertain) throws Exception {
         return ui(() -> {
             JPanel content = stack();
             content.add(heading("发现更新", ""));
@@ -66,6 +98,10 @@ final class UpdateUi {
             content.add(scroll(text(announcement == null || announcement.isBlank() ? "暂无更新说明。" : announcement), 640, 190));
             content.add(Box.createVerticalStrut(16));
             content.add(note("更新时会退出游戏，完成后请重新启动。"));
+            if (uncertain) {
+                content.add(Box.createVerticalStrut(12));
+                content.add(note("缺少可比较的发布编号，无法确认新旧顺序；此次安装可能降级，请核对版本与来源。"));
+            }
             return dialog(null, "发现更新", content, "更新并退出游戏", "跳过并继续游戏", 720);
         });
     }

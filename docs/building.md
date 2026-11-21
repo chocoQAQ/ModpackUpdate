@@ -71,20 +71,20 @@
 
 ```text
 build/dist/all/
-  ModpackUpdate-0.3.0-preview.3-fabric-mc1.20.1.jar
-  ModpackUpdate-0.3.0-preview.3-fabric-mc1.21.1.jar
-  ModpackUpdate-0.3.0-preview.3-fabric-mc1.21.4.jar
-  ModpackUpdate-0.3.0-preview.3-neoforge-mc1.21.1.jar
-  ModpackUpdate-0.3.0-preview.3-neoforge-mc1.21.4.jar
-  ModpackUpdate-0.3.0-preview.3-forge-mc1.20.1.jar
-  ModpackUpdate-0.3.0-preview.3-quilt-mc1.20.1.jar
-  ModpackUpdate-0.3.0-preview.3-quilt-mc1.21.1.jar
-  ModpackUpdate-updater-0.3.0-preview.3.jar
+  ModpackUpdate-0.3.0-preview.4-fabric-mc1.20.1.jar
+  ModpackUpdate-0.3.0-preview.4-fabric-mc1.21.1.jar
+  ModpackUpdate-0.3.0-preview.4-fabric-mc1.21.4.jar
+  ModpackUpdate-0.3.0-preview.4-neoforge-mc1.21.1.jar
+  ModpackUpdate-0.3.0-preview.4-neoforge-mc1.21.4.jar
+  ModpackUpdate-0.3.0-preview.4-forge-mc1.20.1.jar
+  ModpackUpdate-0.3.0-preview.4-quilt-mc1.20.1.jar
+  ModpackUpdate-0.3.0-preview.4-quilt-mc1.21.1.jar
+  ModpackUpdate-updater-0.3.0-preview.4.jar
 ```
 
 玩家仅将对应实例的一个模组 JAR 放入 `mods/`。独立 updater 已嵌入每个模组，单独输出的 updater 用于整合包作者执行 `seed`。版本号统一读取 `gradle.properties` 的 `modVersion`，同时写入文件名、模组元数据和 updater manifest。
 
-各目标的中间产物和测试报告位于 `build/targets/<目标 ID>/`；共享更新器报告位于 `updater/build/reports/tests/test/`。分发使用 Gradle `Sync`，每次成功构建会同步所选输出目录，清除该目录内过期产物。仅运行 JAR 任务不会刷新分发目录，应以分发任务成功后的输出为准。
+各目标的中间产物和测试报告位于 `build/targets/<目标 ID>/`；共享更新器报告位于 `updater/build/reports/tests/test/`，启动桥接器报告位于 `bootstrap/build/reports/tests/test/`。分发任务也执行桥接器测试，验证事务阻断和内嵌更新器缓存重建。分发使用 Gradle `Sync`，每次成功构建会同步所选输出目录，清除该目录内过期产物。仅运行 JAR 任务不会刷新分发目录，应以分发任务成功后的输出为准。
 
 ## 添加目标
 
@@ -112,6 +112,8 @@ Fabric / Quilt 编译直接使用 `loaderVersion`。Forge / NeoForge 的当前�
 ## GitHub Actions
 
 工作流在向 `dev` / `main` 推送、提交 PR 或手动触发时运行，从清单生成矩阵，为每个目标安装 JDK 17 和目标 JDK，执行构建并上传对应 JAR 与测试报告。Linux 测试在 Xvfb 显示环境中运行，允许执行 Swing 测试。
+
+此外，Windows job 使用 JDK 17 构建并测试 Fabric 1.20.1，同时执行共享更新器和桥接器测试，覆盖仅改文件名大小写、路径冲突和事务恢复阻断等场景。Windows 与 Linux 的文件路径比较行为不同，这些测试需要同时保留。
 
 CI 产物用于下载验证，不会自动创建或替换 GitHub Release。新增目标完成真实游戏验证后，再按预览版发布流程上传产物。
 
