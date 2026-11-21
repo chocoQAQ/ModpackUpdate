@@ -52,6 +52,8 @@ CI 已加入 Windows Fabric 1.20.1 构建任务，执行共享核心、桥接器
 
 本机 Windows、JDK 17/21 执行 `./build.ps1 all --offline`：八个目标构建成功，**112 项测试通过，失败 0、错误 0、跳过 0**。其中含独立更新器进程的自身替换、无编号兜底确认、独立修复与活动游戏拒绝、取消窗口、慢速下载超时、历史事务恢复和备份保留测试。图形测试输出位于 `updater/build/qa/`。这些为自动化和模拟故障验证，未替代真实 Minecraft / 启动器兼容性或硬件断电验证。
 
+同日复核 CI 时，Windows 短路径修正已通过，Linux 仍因禁用候选路径沿用不区分大小写的发布路径校验而失败。已将该分支统一到平台操作路径校验，发布清单仍保持严格校验。另外新增 6 个跨版本保留选择和恢复文件缺失场景，修复“后续发布自动禁用此前保留的旧模组”以及“禁用文件和原文件均未恢复仍清除事务”两个遗漏。新增场景在修复前有 5 个失败，修复后本地八目标构建及 **118 项测试全部通过，无失败、无跳过**。
+
 ## R1 Windows 大小写改名会把新版 JAR 禁用
 
 **定位：** [Planner.java 第 16–18 行](https://github.com/chocoQAQ/ModpackUpdate/blob/fb58e0ae638575232931e77f9740fcb8dbb42b07/updater/src/main/java/dev/modpackupdate/updater/Planner.java#L16-L18)、[第 32–39 行](https://github.com/chocoQAQ/ModpackUpdate/blob/fb58e0ae638575232931e77f9740fcb8dbb42b07/updater/src/main/java/dev/modpackupdate/updater/Planner.java#L32-L39)。

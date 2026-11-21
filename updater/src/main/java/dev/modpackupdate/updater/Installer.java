@@ -165,6 +165,8 @@ final class Installer {
                     if (!FilesSupport.hash(disabled).equals(operation.oldHash())) throw new IOException("禁用文件已被外部修改 " + operation.path());
                     if (Files.exists(destination)) throw new IOException("恢复时发现同名文件 " + operation.path());
                     Files.move(disabled, destination);
+                } else {
+                    throw new IOException("禁用文件缺失且原模组未恢复 " + operation.path());
                 }
                 continue;
             }
@@ -187,7 +189,7 @@ final class Installer {
     private boolean conflicts(List<String> paths, String candidate) {
         var all = new ArrayList<>(paths);
         all.add(candidate);
-        try { FilesSupport.validateFilePaths(all); return false; }
+        try { FilesSupport.validateOperationPaths(all); return false; }
         catch (IOException conflict) { return true; }
     }
     private void cleanupCommitted(Models.Journal journal) throws IOException {

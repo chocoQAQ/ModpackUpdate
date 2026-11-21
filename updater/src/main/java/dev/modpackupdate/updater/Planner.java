@@ -23,7 +23,8 @@ final class Planner {
             if (FilesSupport.protectedPath(target.path(), config)) continue;
             Models.Baseline baseline = baselines.get(FilesSupport.relative(target.path()));
             boolean becameRequired = baseline != null && baseline.optional() && !target.optional();
-            if (!repair && baseline != null && target.sha512().equals(baseline.targetSha512()) && !becameRequired) continue;
+            boolean retainedMod = baseline != null && baseline.retained() && FilesSupport.managedMod(target.path());
+            if (!repair && !retainedMod && baseline != null && target.sha512().equals(baseline.targetSha512()) && !becameRequired) continue;
             Path destination = FilesSupport.resolve(root, target.path());
             String observed = Files.exists(destination) ? FilesSupport.hash(destination) : null;
             if (target.sha512().equals(observed)) {
@@ -33,6 +34,7 @@ final class Planner {
             String conflict = null;
             if (baseline != null && !Objects.equals(observed, baseline.sha512())) conflict = "本地文件已修改或移除";
             if (baseline == null && observed != null) conflict = "现有文件缺少原版基线";
+            if (retainedMod) conflict = "此前保留的模组差异，勾选后采用新版";
             if (target.optional() && observed == null) conflict = "可选模组，勾选后安装";
             if (becameRequired && observed == null) conflict = "此前未安装的可选文件已改为必需";
             changes.add(new Models.Change(target.path(), target, observed, conflict));
@@ -44,6 +46,7 @@ final class Planner {
             if (!Files.exists(destination)) continue;
             String observed = FilesSupport.hash(destination);
             String conflict = observed.equals(entry.getValue().sha512()) ? null : "即将禁用的旧模组已被修改";
+            if (entry.getValue().retained()) conflict = "此前保留的旧模组，勾选后禁用";
             changes.add(new Models.Change(path, null, observed, conflict));
         }
         return changes;

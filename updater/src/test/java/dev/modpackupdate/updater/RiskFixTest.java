@@ -122,6 +122,67 @@ class RiskFixTest {
         assertEquals(List.of(install, disable), selected);
     }
 
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void retainedReplacementAndOldModRemainLinkedAcrossLaterReleases(boolean adoptLater) throws Exception {
+        mod("mods/old.jar", "example");
+        var previous = installed("mods/old.jar");
+        mod("mods/new.jar", "player_other_mod");
+        Path payload = mod("ModpackUpdate/downloads/new.jar", "example");
+        var updated = target("mods/new.jar", payload);
+        var targets = Map.of(updated.path(), updated);
+        var config = new Models.Config();
+        var installer = new Installer(root);
+        var initial = Planner.plan(root, config, previous, targets);
+        var defaults = initial.stream().filter(change -> change.conflict() == null).toList();
+        var selected = installer.reconcileSelection(initial, defaults, Map.of());
+        var retained = Planner.next(previous, release(), targets, initial, selected, config);
+        installer.install(previous, retained, selected, Map.of(), false);
+
+        var later = new Models.Release(1, "test", 3, "3.0", "", null, new Models.Overrides(false, null, List.of()), null);
+        var changes = Planner.plan(root, config, retained, targets);
+        assertTrue(changes.stream().anyMatch(change -> !change.disable() && change.path().equals("mods/new.jar")),
+                "A retained replacement must be reconsidered when an old mod is still managed");
+        assertTrue(changes.stream().filter(Models.Change::disable).allMatch(change -> change.conflict() != null));
+        var choices = adoptLater ? changes : changes.stream().filter(change -> change.conflict() == null).toList();
+        var staged = adoptLater ? Map.of(updated.path(), payload) : Map.<String, Path>of();
+        choices = installer.reconcileSelection(changes, choices, staged);
+        var next = Planner.next(retained, later, targets, changes, choices, config);
+        installer.install(retained, next, choices, staged, false);
+        assertEquals(!adoptLater, Files.exists(root.resolve("mods/old.jar")));
+        assertEquals(adoptLater ? "complete" : "modified", next.installationStatus);
+    }
+
+    @Test void retainedMissingRequiredModStillNeedsConsentOnLaterRelease() throws Exception {
+        Path payload = mod("ModpackUpdate/downloads/new.jar", "example");
+        var updated = target("mods/new.jar", payload);
+        var previous = new Models.Installed();
+        previous.files.put(updated.path(), new Models.Baseline(null, updated.sha512(), true, false));
+        var changes = Planner.plan(root, new Models.Config(), previous, Map.of(updated.path(), updated));
+        assertEquals(1, changes.size());
+        assertNotNull(changes.get(0).conflict());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"missing", "changed", "restored"})
+    void recoveryDoesNotDeclareSuccessWhenBothDisabledAndOriginalModAreLost(String state) throws Exception {
+        Path original = mod("mods/old.jar", "example");
+        byte[] originalBytes = Files.readAllBytes(original);
+        var previous = installed("mods/old.jar");
+        var changes = Planner.plan(root, new Models.Config(), previous, Map.of());
+        var next = Planner.next(previous, release(), Map.of(), changes, changes, new Models.Config());
+        var installer = new Installer(root, "fabric-loader", step -> { if (step.equals("disabled")) throw new SimulatedCrash(); });
+        assertThrows(SimulatedCrash.class, () -> installer.install(previous, next, changes, Map.of(), false));
+        Files.delete(root.resolve("mods/old.jar.disable"));
+        if (state.equals("changed")) Files.writeString(original, "external modification");
+        if (state.equals("restored")) Files.write(original, originalBytes);
+        if (state.equals("restored")) {
+            new Installer(root).recover();
+            assertFalse(installer.pending());
+        } else {
+            assertThrows(IOException.class, () -> new Installer(root).recover());
+            assertTrue(installer.pending());
+        }
+    }
+
     @ParameterizedTest @ValueSource(strings = {"journal", "starting", "backup", "installed", "committed"})
     void interruptedInstallRestoresOldStateOrCompletesCommittedState(String point) throws Exception {
         file("config/a", "old");
