@@ -33,9 +33,11 @@ class CompactProtocolTest {
         byte[] manifest = json(detail);
         var entry = new Models.Release(2, "pack", 2, "2.0", null, null, null, null, artifact(base + "/manifest", manifest));
         var requests = new java.util.concurrent.ConcurrentHashMap<String, AtomicInteger>();
+        var requestHeaders = new java.util.concurrent.CopyOnWriteArrayList<String>();
         var responses = Map.of("/latest", json(entry), "/manifest", manifest, "/index", index);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
+            requestHeaders.add(path + ":" + exchange.getRequestHeaders().getFirst(Protocol.REQUEST_PROTOCOL_HEADER));
             requests.computeIfAbsent(path, ignored -> new AtomicInteger()).incrementAndGet();
             byte[] body = responses.getOrDefault(path, new byte[]{0});
             exchange.sendResponseHeaders(responses.containsKey(path) ? 200 : 404, body.length);
@@ -65,6 +67,9 @@ class CompactProtocolTest {
             assertEquals(1, requests.get("/manifest").get());
             assertEquals(1, requests.get("/index").get());
             assertFalse(requests.containsKey("/pack"));
+            assertTrue(requestHeaders.contains("/latest:2"));
+            assertTrue(requestHeaders.contains("/manifest:null"));
+            assertTrue(requestHeaders.contains("/index:null"));
             // The authoring command must consume the same v2 entry and package both state files.
             Path instance = root.resolve("seed-instance");
             Files.createDirectories(instance);
@@ -76,6 +81,7 @@ class CompactProtocolTest {
                 assertEquals(0, seed.exitValue(), Files.readString(root.resolve("seed.log")));
                 assertEquals(2, InstalledStore.read(instance).schemaVersion);
                 assertEquals(2, InstalledStore.read(instance).releaseId);
+                assertEquals(3, requestHeaders.stream().filter("/latest:2"::equals).count());
             } finally { seed.destroyForcibly(); }
         } finally { server.stop(0); }
     }

@@ -36,27 +36,29 @@ latest.json
 仓库提供本地 `seed` 命令，可从一个已经发布的固定版本生成出厂记录。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.6.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
 ```
 
 NeoForge 1.21.1 实例在末尾增加 `neoforge` 参数，并指定准确的加载器版本。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.6.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
 ```
 
 省略最后一个参数时按 `fabric-loader` 处理。NeoForge 使用 `neoforge`，Forge 使用 `forge`，Quilt 使用 `quilt-loader`。参数中的游戏版本、加载器版本与索引依赖必须准确匹配。新增平台示例：
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.6.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.6.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
 ```
 
 四个平台继续使用同一套静态发布协议；`.mrpack` 选择对应平台的 ModpackUpdate JAR，分别维护更新源。
 
 目标是作者的干净打包实例目录。命令从该版本的安装清单、索引和 overrides 文件表生成哈希基线，仅下载元数据，不下载所有模组。`installed.json` 已存在时拒绝重建，避免误覆盖运行实例的差异记录。生成后将配置中的 `update-service-url` 改成 `latest.json`，把 `config.json`、`installed.json` 和 `file-indexes/` 下被引用的索引一起放进发行包的 `overrides/ModpackUpdate/config/`，再次计算完整包大小与哈希，再重新生成 `manifest.json` 和版本入口的哈希引用。
 
-v2 入口需要 0.3.0-preview.5 或更新的客户端。向旧玩家迁移时先用 v1 入口分发新版更新器，再切换 v2；迁移期间可同时保留一份直接指向 `manifest.json` 的旧接口。
+v2 解析从 0.3.0-preview.5 开始支持；0.3.0-preview.6 新增请求头 `X-ModpackUpdate-Protocol-Version: 2`。推荐让同一个更新入口按请求头返回格式：缺失或 `1` 返回 v1 完整清单，`2` 返回 v2 小型入口。通过原入口发布新版更新器后，玩家重启就会自动请求 v2，无需改配置；仍使用旧更新器的玩家继续得到 v1。
+
+这需要动态服务或 CDN/边缘路由支持，并正确配置 `Vary`、缓存键及请求头转发，见 [协议协商与迁移](publishing-protocol.md#请求协议版本与同-url-迁移)。纯静态文件服务可以忽略该字段，继续提供 v1；如果要使用 v2，则保留独立 v1 地址兼容旧客户端。两个入口可以共享同一份 `manifest.json` 与产物。
 
 ## 更新前自检
 

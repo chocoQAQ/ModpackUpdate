@@ -71,15 +71,15 @@
 
 ```text
 build/dist/all/
-  ModpackUpdate-0.3.0-preview.5-fabric-mc1.20.1.jar
-  ModpackUpdate-0.3.0-preview.5-fabric-mc1.21.1.jar
-  ModpackUpdate-0.3.0-preview.5-fabric-mc1.21.4.jar
-  ModpackUpdate-0.3.0-preview.5-neoforge-mc1.21.1.jar
-  ModpackUpdate-0.3.0-preview.5-neoforge-mc1.21.4.jar
-  ModpackUpdate-0.3.0-preview.5-forge-mc1.20.1.jar
-  ModpackUpdate-0.3.0-preview.5-quilt-mc1.20.1.jar
-  ModpackUpdate-0.3.0-preview.5-quilt-mc1.21.1.jar
-  ModpackUpdate-updater-0.3.0-preview.5.jar
+  ModpackUpdate-0.3.0-preview.6-fabric-mc1.20.1.jar
+  ModpackUpdate-0.3.0-preview.6-fabric-mc1.21.1.jar
+  ModpackUpdate-0.3.0-preview.6-fabric-mc1.21.4.jar
+  ModpackUpdate-0.3.0-preview.6-neoforge-mc1.21.1.jar
+  ModpackUpdate-0.3.0-preview.6-neoforge-mc1.21.4.jar
+  ModpackUpdate-0.3.0-preview.6-forge-mc1.20.1.jar
+  ModpackUpdate-0.3.0-preview.6-quilt-mc1.20.1.jar
+  ModpackUpdate-0.3.0-preview.6-quilt-mc1.21.1.jar
+  ModpackUpdate-updater-0.3.0-preview.6.jar
 ```
 
 玩家仅将对应实例的一个模组 JAR 放入 `mods/`。独立 updater 已嵌入每个模组，单独输出的 updater 用于整合包作者执行 `seed`。版本号统一读取 `gradle.properties` 的 `modVersion`，同时写入文件名、模组元数据和 updater manifest。

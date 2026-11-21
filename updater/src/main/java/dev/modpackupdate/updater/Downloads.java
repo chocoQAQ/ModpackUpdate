@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -43,14 +44,18 @@ final class Downloads {
         } catch (IllegalArgumentException e) { throw new IOException("无效下载地址", e); }
     }
     void fetch(String url, Path destination, long limit) throws Exception {
+        fetch(url, destination, limit, Map.of());
+    }
+    void fetch(String url, Path destination, long limit, Map<String, String> headers) throws Exception {
         checkCancelled();
         URI uri = allowed(url);
         Files.createDirectories(destination.getParent());
         for (int redirect = 0; redirect <= 5; redirect++) {
             checkCancelled();
-            HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(timeout))
-                    .header("User-Agent", "ModpackUpdate/0.2.0").GET().build();
-            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(timeout))
+                    .header("User-Agent", "ModpackUpdate/0.2.0");
+            headers.forEach(request::header);
+            HttpResponse<InputStream> response = client.send(request.GET().build(), HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream input = response.body()) {
                 active = input;
                 checkCancelled();

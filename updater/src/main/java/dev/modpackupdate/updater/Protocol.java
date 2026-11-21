@@ -17,6 +17,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 final class Protocol {
+    static final String REQUEST_PROTOCOL_HEADER = "X-ModpackUpdate-Protocol-Version";
+    static final String REQUEST_PROTOCOL_VERSION = "2";
     private final Downloads downloads;
     private final Path cache;
     private FullPackFallback fallback;
@@ -28,7 +30,8 @@ final class Protocol {
 
     Models.Release release(String url, String packId) throws Exception {
         Path file = cache.resolve("release.json");
-        try { downloads.fetch(url, file, 16 * 1024 * 1024); }
+        try { downloads.fetch(url, file, 16 * 1024 * 1024,
+                Map.of(REQUEST_PROTOCOL_HEADER, REQUEST_PROTOCOL_VERSION)); }
         catch (InterruptedException e) { throw e; }
         catch (Exception e) { throw new ReleaseUnavailableException(e); }
         Models.Release release = FilesSupport.read(file, Models.Release.class);

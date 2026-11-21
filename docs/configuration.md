@@ -1,8 +1,10 @@
 # 配置文件说明
 
-本文对应 ModpackUpdate 0.3.0-preview.5，适用于 Fabric、NeoForge、Forge 和 Quilt，具体游戏与加载器版本见 [构建目标](building.md)。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
+本文对应 ModpackUpdate 0.3.0-preview.6，适用于 Fabric、NeoForge、Forge 和 Quilt，具体游戏与加载器版本见 [构建目标](building.md)。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
 
 ## 文件位置与生效时机
+
+从 0.3.0-preview.6 开始，更新入口请求自动携带 `X-ModpackUpdate-Protocol-Version: 2`，无需新增配置项。服务可在同一个 `update-service-url` 根据该字段返回 v1 或 v2；无字段请求应返回 v1，让旧客户端先完成更新器升级。纯静态 v1 服务仍兼容。具体请求和缓存规则见 [发布协议](publishing-protocol.md#请求协议版本与同-url-迁移)。
 
 配置、安装记录及文件基线索引统一位于实例的 `ModpackUpdate/config/` 下。使用版本隔离的启动器时，应以该实例实际使用的游戏目录为准。
 
@@ -191,8 +193,8 @@
 先关闭此游戏实例，再使用构建产物中的独立 updater JAR：
 
 ```powershell
-java -jar ModpackUpdate-updater-0.3.0-preview.5.jar repair "D:/Packs/MyPack" "1.20.1" "0.16.10" "fabric-loader"
-java -jar ModpackUpdate-updater-0.3.0-preview.5.jar repair "D:/Packs/MyNeoPack" "1.21.1" "21.1.266" "neoforge"
+java -jar ModpackUpdate-updater-0.3.0-preview.6.jar repair "D:/Packs/MyPack" "1.20.1" "0.16.10" "fabric-loader"
+java -jar ModpackUpdate-updater-0.3.0-preview.6.jar repair "D:/Packs/MyNeoPack" "1.21.1" "21.1.266" "neoforge"
 ```
 
 `repair` 不依赖游戏成功启动，也不受 `enable: false` 限制。存在事务时先恢复；否则允许重新处理更新源提供的相同版本，检查目标文件，即使之前选择了保留差异。冲突仍需勾选，不会强制覆盖保护文件。该命令也可以安装源中的更新版本，但拒绝已知编号更小的版本。需要有图形界面的 Java 环境；无编号版本仍要求确认。若源不再提供当前版本，只能使用可用的更新版本或由作者恢复对应来源。
