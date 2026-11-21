@@ -65,7 +65,9 @@ final class Installer {
     void install(Models.Installed previous, Models.Installed next, List<Models.Change> selected,
                  Map<String, Path> staged, boolean deleteReplacedMods) throws Exception {
         if (pending()) throw new IOException("有未恢复的安装事务");
-        FilesSupport.validateFilePaths(selected.stream().map(Models.Change::path).toList());
+        // Published destinations stay portable; removals may reference a differently cased old path on Linux.
+        FilesSupport.validateFilePaths(selected.stream().filter(change -> !change.disable()).map(Models.Change::path).toList());
+        FilesSupport.validateOperationPaths(selected.stream().map(Models.Change::path).toList());
         validateModIds(selected, staged);
         var destinations = new ArrayList<String>();
         for (Models.Change change : selected) destinations.add(change.path());
@@ -101,7 +103,7 @@ final class Installer {
             journal.operations.add(new Models.Operation(change.path(), journal.backupDirectory + "/" + change.path(),
                     disabledPath, change.disable() ? null : change.target().sha512(), actual));
         }
-        FilesSupport.validateFilePaths(destinations);
+        FilesSupport.validateOperationPaths(destinations);
         Storage.requireSpace(work, installBytes);
         FilesSupport.write(journalFile, journal);
         checkpoint.accept("journal");

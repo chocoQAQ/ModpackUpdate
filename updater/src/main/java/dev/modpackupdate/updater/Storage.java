@@ -23,6 +23,7 @@ final class Storage {
         cleanup(root, cacheMaxMib, 0);
     }
     static void cleanup(Path root, int cacheMaxMib, int backupRetentionCount) throws IOException {
+        root = root.toRealPath();
         if (Files.exists(FilesSupport.resolve(root, "ModpackUpdate/transaction.json"))) return;
         if (backupRetentionCount > 0) pruneBackups(root, backupRetentionCount);
         Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");

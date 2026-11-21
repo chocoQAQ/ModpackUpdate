@@ -81,6 +81,18 @@ final class FilesSupport {
         }
         return result;
     }
+    static void validateOperationPaths(Collection<String> paths) throws IOException {
+        var names = new HashSet<Path>();
+        for (String path : paths) {
+            Path local = relative(path);
+            if (!names.add(local)) throw new IOException("重复操作路径 " + path);
+        }
+        for (Path path : names) {
+            for (Path parent = path.getParent(); parent != null; parent = parent.getParent()) {
+                if (names.contains(parent)) throw new IOException("操作文件与目录路径冲突 " + path);
+            }
+        }
+    }
     static String portable(Path path) { return path.toString().replace('\\', '/'); }
     static boolean managedMod(String path) {
         return path.startsWith("mods/") && path.endsWith(".jar");
