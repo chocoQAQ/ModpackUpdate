@@ -21,6 +21,8 @@ final class Protocol {
     private final Path cache;
     private FullPackFallback fallback;
     private boolean confirmationRequired;
+    private Models.Release resolved;
+    private Models.Release resolvedEntry;
     private Runnable fallbackStarted = () -> {};
     Protocol(Downloads downloads, Path cache) { this.downloads = downloads; this.cache = cache; }
 
@@ -31,7 +33,24 @@ final class Protocol {
         catch (Exception e) { throw new ReleaseUnavailableException(e); }
         Models.Release release = FilesSupport.read(file, Models.Release.class);
         validateRelease(release, packId);
+        if (release.protocolVersion() == 2 && Files.size(file) > 64 * 1024) throw new IOException("v2 版本入口大小超限");
         return release;
+    }
+
+    // Version checks deliberately do not fetch the installation manifest or file indexes.
+    Models.Release details(Models.Release release) throws Exception {
+        if (release.manifest() == null) return release;
+        if (release.equals(resolvedEntry)) return resolved;
+        Path file = downloads.artifact(release.manifest(), cache);
+        Models.Release detail = FilesSupport.read(file, Models.Release.class);
+        validateRelease(detail, release.packId());
+        if (detail.manifest() != null || detail.protocolVersion() != 1
+                || detail.releaseId() != release.releaseId() || !detail.version().equals(release.version())) {
+            throw new IOException("安装清单与版本入口不匹配");
+        }
+        resolved = detail;
+        resolvedEntry = release;
+        return detail;
     }
 
     private static final class ReleaseUnavailableException extends IOException {
@@ -51,6 +70,8 @@ final class Protocol {
     Models.Release findUpdate(Models.Config config, Models.Installed installed, Path root,
                               String minecraft, String loader, String loaderType, boolean repair) throws Exception {
         fallback = null;
+        resolved = null;
+        resolvedEntry = null;
         confirmationRequired = false;
         try {
             Models.Release release = release(config.updateServiceUrl, config.packId);
@@ -76,12 +97,22 @@ final class Protocol {
     }
 
     static void validateRelease(Models.Release release, String packId) throws IOException {
-        if (release.protocolVersion() != 1 || packId == null || packId.isBlank() || !packId.equals(release.packId())) {
+        if (release == null || (release.protocolVersion() != 1 && release.protocolVersion() != 2)
+                || packId == null || packId.isBlank() || !packId.equals(release.packId())) {
             throw new IOException("发布协议版本或整合包 ID 不匹配");
         }
         if (release.releaseId() < 0 || release.version() == null || !release.version().matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}")) {
             throw new IOException("发布版本无效");
         }
+        if (release.protocolVersion() == 2) {
+            validateArtifact(release.manifest());
+            if (release.manifest().size() > 16 * 1024 * 1024) throw new IOException("安装清单大小超限");
+            if (release.index() != null || release.overrides() != null || release.fullPack() != null || release.announcement() != null) {
+                throw new IOException("v2 版本入口只允许检查字段，安装数据请放入 manifest");
+            }
+            return;
+        }
+        if (release.manifest() != null) throw new IOException("v1 清单不能引用其他安装清单");
         validateArtifact(release.index());
         validateArtifact(release.fullPack());
         if (release.overrides() == null || release.overrides().files() == null) throw new IOException("缺少 overrides 声明");
@@ -101,6 +132,7 @@ final class Protocol {
 
     Map<String, Models.Target> targets(Models.Release release, Path root, String minecraft, String loader, String loaderType) throws Exception {
         if (fallback != null) return fallback.targets();
+        release = details(release);
         Path index;
         try { index = downloads.artifact(release.index(), cache); }
         catch (Exception e) {
@@ -169,6 +201,7 @@ final class Protocol {
         if (!paths.add(path.toLowerCase(Locale.ROOT))) throw new IOException("重复文件路径 " + path);
     }
     Path stage(Models.Target target, Models.Release release) throws Exception {
+        release = details(release);
         if (!target.override()) return downloads.verified(target.downloads(), target.sha512(), target.size(), cache);
         if (fallback != null) return extract(fallback.archive(), fallback.entries().get(target.path()), target.sha512(), target.size());
         try {

@@ -24,7 +24,12 @@ final class Models {
     record PackRelease(int protocolVersion, String packId, long releaseId, String version) {}
     record Overrides(boolean present, Artifact archive, List<OverrideFile> files) {}
     record Release(int protocolVersion, String packId, long releaseId, String version,
-                   String announcement, Artifact index, Overrides overrides, Artifact fullPack) {}
+                   String announcement, Artifact index, Overrides overrides, Artifact fullPack, Artifact manifest) {
+        Release(int protocolVersion, String packId, long releaseId, String version,
+                String announcement, Artifact index, Overrides overrides, Artifact fullPack) {
+            this(protocolVersion, packId, releaseId, version, announcement, index, overrides, fullPack, null);
+        }
+    }
     static final class Installed {
         int schemaVersion = 1;
         String packId = "";
@@ -34,6 +39,7 @@ final class Models {
         boolean fullPackFallback = false;
         boolean fullPackSequenceKnown = false;
         String installationStatus = "complete";
+        String filesIndex;
         Map<String, Baseline> files = new LinkedHashMap<>();
     }
     record Baseline(String sha512, String targetSha512, boolean retained, boolean optional) {

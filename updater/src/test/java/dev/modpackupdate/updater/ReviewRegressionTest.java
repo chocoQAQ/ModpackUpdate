@@ -91,7 +91,7 @@ class ReviewRegressionTest {
         try (var files = Files.list(root.resolve("mods"))) {
             assertEquals(1, files.filter(path -> path.getFileName().toString().endsWith(".jar")).count());
         }
-        assertEquals(2, FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class).releaseId);
+        assertEquals(2, InstalledStore.read(root).releaseId);
         assertFalse(new Installer(root).pending());
     }
 

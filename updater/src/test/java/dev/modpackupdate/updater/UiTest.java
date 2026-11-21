@@ -104,8 +104,10 @@ class UiTest {
         UpdateUi ui = new UpdateUi();
         Models.Target target = new Models.Target("config/example.json", "a".repeat(128), 1, List.of(), true, false);
         Models.Change conflict = new Models.Change(target.path(), target, "b".repeat(128), "本地文件已修改或移除");
+        Models.Target optional = new Models.Target("mods/optional.jar", "c".repeat(128), 1, List.of(), false, true);
+        Models.Change optionalChange = new Models.Change(optional.path(), optional, null, "可选模组");
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        var result = executor.submit(() -> ui.choose(List.of(conflict), new Models.Config()));
+        var result = executor.submit(() -> ui.choose(List.of(conflict, optionalChange), new Models.Config()));
         try {
             Window[] dialog = {null};
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
@@ -120,7 +122,8 @@ class UiTest {
             assertNotNull(dialog[0]);
             SwingUtilities.invokeAndWait(() -> {
                 JTable table = find(dialog[0], JTable.class).get(0);
-                assertEquals(false, table.getValueAt(0, 0));
+                assertEquals(true, table.getValueAt(0, 0));
+                assertEquals(false, table.getValueAt(1, 0));
                 JCheckBox delete = find(dialog[0], JCheckBox.class).get(0);
                 assertFalse(delete.isSelected());
                 click(dialog[0], "全选");

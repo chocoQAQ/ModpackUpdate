@@ -7,15 +7,16 @@
 1. 验证 ZIP、路径和 `modrinth.index.json`，读取版本号及 Minecraft / Loader 依赖，分配递增 `release-id`。更新公告由发布时填写。
 2. 保留原索引字节，输出独立 `modrinth.index.json`。
 3. 枚举 `overrides/`，再用 `client-overrides/` 覆盖相同路径。忽略 `server-overrides/`。对派生产物过滤 `ModpackUpdate/` 运行目录，保留其余最终客户端文件。
-4. 按合并后的相对路径生成 `overrides.zip`，直接包含 `config/...` 等文件。计算每个条目的大小和 SHA-512，将完整条目列表写入发布元数据。集合为空时省略 ZIP，写 `present: false`。
-5. 在 `.mrpack` 根目录写入 `modpackupdate.release.json`，包含本次接口的 `protocol-version`、`pack-id`、`release-id`、`version`（格式见发布协议）。如果上传包已有此文件，替换为本次发布信息。将最终包作为完整包兜底，再计算完整包、索引和 overrides ZIP 的大小与 SHA-512。
-6. 将更新公告、文件信息和三个产物 URL 写成发布元数据。上传并确认产物可取后，切换最新发布入口。
+4. 按合并后的相对路径生成 `overrides.zip`，直接包含 `config/...` 等文件。计算每个条目的大小和 SHA-512，将完整条目列表写入安装清单。集合为空时省略 ZIP，写 `present: false`。
+5. 在 `.mrpack` 根目录写入 `modpackupdate.release.json`，固定 `protocol-version: 1`，包含与接口一致的 `pack-id`、`release-id`、`version`（格式见发布协议）。如果上传包已有此文件，替换为本次发布信息。将最终包作为完整包兜底，再计算完整包、索引和 overrides ZIP 的大小与 SHA-512。
+6. 将更新公告、文件信息和三个产物 URL 写成 `manifest.json`（v1 完整清单格式），计算其大小和 SHA-512。生成 v2 `release.json`，只含版本检查字段和 `manifest` 的 URL、大小、哈希。上传并确认所有产物可取后，原子切换 `latest.json`。
 
-每版通常只有四个公开文件。
+每版通常只有五个公开文件，仍全部从单个上传包自动派生。
 
 ```text
 12/
   release.json
+  manifest.json
   modrinth.index.json
   overrides.zip
   my-pack-1.2.0.mrpack
@@ -28,32 +29,34 @@ latest.json
 
 首发整合包应携带匹配当前版本的 `installed.json`，让玩家首次启动就知道已经安装哪个版本，并准确识别后续的本地修改。
 
-服务可以从完整客户端文件映射直接生成该 JSON，过滤玩家保护路径和 `ModpackUpdate/`。对每个文件设置 `sha512` 与 `target-sha512` 为作者原始哈希、`retained` 为假。对可选文件仅记录实际随初始实例启用的项目。
+服务可以从完整客户端文件映射生成文件基线索引及引用它的 `installed.json`，过滤玩家保护路径和 `ModpackUpdate/`。对每个文件设置 `sha512` 与 `target-sha512` 为作者原始哈希、`retained` 为假。对可选文件仅记录实际随初始实例启用的项目。推荐用以下 `seed` 命令生成 schema v2 记录，避免手工计算索引引用。
 
 如果服务负责补入出厂配置与基线，可以先从上传包派生最终文件映射，再把出厂记录写进供启动器导入的 `.mrpack` 的 `overrides/ModpackUpdate/config/`，最后计算完整包哈希。保留目录不参与 overrides 更新列表，因此不会形成基线哈希自引用。若上传包已有 `client-overrides/ModpackUpdate/config/`，必须同步更新或移除该旧副本，以免覆盖新出厂记录。
 
 仓库提供本地 `seed` 命令，可从一个已经发布的固定版本生成出厂记录。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.4.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyPack" "https://updates.example.com/my-pack/12/release.json" "my-pack" "1.20.1" "0.16.10"
 ```
 
 NeoForge 1.21.1 实例在末尾增加 `neoforge` 参数，并指定准确的加载器版本。
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.4.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyNeoPack" "https://updates.example.com/my-neo-pack/12/release.json" "my-neo-pack" "1.21.1" "21.1.266" "neoforge"
 ```
 
 省略最后一个参数时按 `fabric-loader` 处理。NeoForge 使用 `neoforge`，Forge 使用 `forge`，Quilt 使用 `quilt-loader`。参数中的游戏版本、加载器版本与索引依赖必须准确匹配。新增平台示例：
 
 ```powershell
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.4.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
-java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.4.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyForgePack" "https://updates.example.com/forge-pack/12/release.json" "forge-pack" "1.20.1" "47.4.28" "forge"
+java -jar build/dist/all/ModpackUpdate-updater-0.3.0-preview.5.jar seed "D:/Packs/MyQuiltPack" "https://updates.example.com/quilt-pack/12/release.json" "quilt-pack" "1.21.1" "0.30.2" "quilt-loader"
 ```
 
 四个平台继续使用同一套静态发布协议；`.mrpack` 选择对应平台的 ModpackUpdate JAR，分别维护更新源。
 
-目标是作者的干净打包实例目录。命令从该版本的索引和 overrides 文件表生成哈希基线，仅下载元数据，不下载所有模组。`installed.json` 已存在时拒绝重建，避免误覆盖运行实例的差异记录。生成后将配置中的 `update-service-url` 改成 `latest.json`，把两个 JSON 放进发行包的 `overrides/ModpackUpdate/config/`，再次计算完整包大小与哈希。
+目标是作者的干净打包实例目录。命令从该版本的安装清单、索引和 overrides 文件表生成哈希基线，仅下载元数据，不下载所有模组。`installed.json` 已存在时拒绝重建，避免误覆盖运行实例的差异记录。生成后将配置中的 `update-service-url` 改成 `latest.json`，把 `config.json`、`installed.json` 和 `file-indexes/` 下被引用的索引一起放进发行包的 `overrides/ModpackUpdate/config/`，再次计算完整包大小与哈希，再重新生成 `manifest.json` 和版本入口的哈希引用。
+
+v2 入口需要 0.3.0-preview.5 或更新的客户端。向旧玩家迁移时先用 v1 入口分发新版更新器，再切换 v2；迁移期间可同时保留一份直接指向 `manifest.json` 的旧接口。
 
 ## 更新前自检
 

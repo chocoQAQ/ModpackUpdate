@@ -1,14 +1,15 @@
 # 配置文件说明
 
-本文对应 ModpackUpdate 0.3.0-preview.4，适用于 Fabric、NeoForge、Forge 和 Quilt，具体游戏与加载器版本见 [构建目标](building.md)。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
+本文对应 ModpackUpdate 0.3.0-preview.5，适用于 Fabric、NeoForge、Forge 和 Quilt，具体游戏与加载器版本见 [构建目标](building.md)。各构建使用相同配置字段，加载器类型由模组自动识别。整合包作者通过 `config.json` 设置更新地址和安装策略，客户端通过 `installed.json` 记录已安装版本及文件基线。
 
 ## 文件位置与生效时机
 
-两个文件都位于当前游戏实例的根目录下。使用版本隔离的启动器时，应以该实例实际使用的游戏目录为准。
+配置、安装记录及文件基线索引统一位于实例的 `ModpackUpdate/config/` 下。使用版本隔离的启动器时，应以该实例实际使用的游戏目录为准。
 
 ```text
 <游戏根目录>/ModpackUpdate/config/config.json
 <游戏根目录>/ModpackUpdate/config/installed.json
+<游戏根目录>/ModpackUpdate/config/file-indexes/<SHA-512>.json
 ```
 
 首次正常启动检查时，如果 `config.json` 缺失，程序会生成下方默认配置。配置在每次启动检查时读取，修改后于下次启动生效。文件使用 UTF-8 编码、JSON 对象和本文列出的字段名称，布尔值使用 `true`、`false`。
@@ -104,7 +105,11 @@
 | 本地文件冲突、待选择的可选文件 | 显示勾选列表 | 显示勾选列表 |
 | 更新完成 | 显示结果，玩家从启动器重新启动 | 显示结果，玩家从启动器重新启动 |
 
-静默模式仍会显示下载、安装进度和结果。冲突项默认不勾选，玩家可以逐项选择、全选或全不选。勾选表示允许采用该条目的新版操作，包括覆盖文件或禁用旧模组。全不选会保留所有冲突项，其余无需选择的变更继续安装。
+静默模式仍会显示下载、安装进度和结果。有冲突仍显示选择框，冲突项默认勾选云端操作，玩家可以逐项选择、全选或全不选；新增可选文件仍默认不勾选。受保护路径不进入覆盖选择。
+
+采用云端模组时，客户端读取模组 ID，将其他文件名下的同 ID 本地 JAR 一并改名禁用，包括缺少旧基线或此前手动改名的模组。这个联动优先于单独保留旧 JAR 的选择；若要保留旧版，应取消新版模组。未被云端替代的额外本地模组保留。禁用以整个 JAR 为单位，多模组 JAR 命中任一重复 ID 时整体禁用。受保护 JAR 不会被自动禁用，云端自身重复 ID 或仍冲突的目标文件会在写盘前报错，避免安装出两个同时启用的同 ID 模组。
+
+同路径覆盖仍按备份/删除选项处理；不同路径替换保留旧文件为 `.jar.disable`，不删除，也不另复制一份备份。全不选会跳过表中的冲突项，其他自动处理项继续安装；若自动采用的新版模组与保留的旧 JAR 同 ID，仍按上述联动规则处理。
 
 若跳过了新版模组，程序不会独立禁用无法确认已有替代品的旧模组。选中的新版下载后按模组 ID 核对：只有所有旧 ID 都由已采用的替代文件提供时，关联的禁用才保留。因为未选择的文件不会额外下载，这种情况下也可能保留其他无法确认关系的旧模组，结果会显示保留差异。全都采用、无冲突的普通移除仍正常禁用旧模组。
 
@@ -186,8 +191,8 @@
 先关闭此游戏实例，再使用构建产物中的独立 updater JAR：
 
 ```powershell
-java -jar ModpackUpdate-updater-0.3.0-preview.4.jar repair "D:/Packs/MyPack" "1.20.1" "0.16.10" "fabric-loader"
-java -jar ModpackUpdate-updater-0.3.0-preview.4.jar repair "D:/Packs/MyNeoPack" "1.21.1" "21.1.266" "neoforge"
+java -jar ModpackUpdate-updater-0.3.0-preview.5.jar repair "D:/Packs/MyPack" "1.20.1" "0.16.10" "fabric-loader"
+java -jar ModpackUpdate-updater-0.3.0-preview.5.jar repair "D:/Packs/MyNeoPack" "1.21.1" "21.1.266" "neoforge"
 ```
 
 `repair` 不依赖游戏成功启动，也不受 `enable: false` 限制。存在事务时先恢复；否则允许重新处理更新源提供的相同版本，检查目标文件，即使之前选择了保留差异。冲突仍需勾选，不会强制覆盖保护文件。该命令也可以安装源中的更新版本，但拒绝已知编号更小的版本。需要有图形界面的 Java 环境；无编号版本仍要求确认。若源不再提供当前版本，只能使用可用的更新版本或由作者恢复对应来源。
@@ -200,11 +205,11 @@ java -jar ModpackUpdate-updater-0.3.0-preview.4.jar repair "D:/Packs/MyNeoPack" 
 
 ## installed.json
 
-该文件保存当前版本与受管文件的原始内容基线，供后续更新判断玩家是否修改过文件。作者为初始发行版本生成它，成功安装后由客户端自动维护。
+该文件只保存版本、状态和文件基线索引引用。启动检查不读取文件基线；发现候选更新、准备安装时才从 `file-indexes/{files-index}.json` 校验并加载基线。作者为初始发行版本生成这些文件，成功安装后由客户端自动维护。旧 v1 内联基线继续兼容，成功安装后自动迁移。
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| `schema-version` | 整数 | 安装记录格式，当前为 `1` |
+| `schema-version` | 整数 | 安装记录格式，当前为 `2`，仍可读取旧 `1` |
 | `pack-id` | 字符串 | 整合包标识 |
 | `release-id` | 整数 | 最近成功处理的发布编号 |
 | `version` | 字符串 | 最近成功处理的展示版本 |
@@ -212,9 +217,9 @@ java -jar ModpackUpdate-updater-0.3.0-preview.4.jar repair "D:/Packs/MyNeoPack" 
 | `full-pack-sequence-known` | 布尔值 | 该兜底安装是否携带统一发布编号；缺省为 `false` |
 | `installation-status` | 字符串 | `complete` 或 `modified`；旧记录可结合 `files.*.retained` 判断 |
 | `transaction-id` | 字符串 | 最近成功提交的安装事务编号，初始记录可为空字符串 |
-| `files` | 对象 | 以游戏根目录相对路径为键的受管文件记录 |
+| `files-index` | 字符串 | 基线索引原始字节的 SHA-512，同时用作 `file-indexes/` 下的文件名（加 `.json`） |
 
-`files` 中每个条目包含以下字段。
+基线索引格式为 `{ "files": { ... } }`，`files` 以游戏根目录相对路径为键，每个条目包含以下字段。旧 v1 将相同对象直接放在 `installed.json` 内。
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
@@ -225,9 +230,9 @@ java -jar ModpackUpdate-updater-0.3.0-preview.4.jar repair "D:/Packs/MyNeoPack" 
 
 哈希字符串使用 128 位小写十六进制。作者原始哈希由已发行版本的文件内容计算，可以通过独立程序的 `seed` 命令生成。玩家修改后的磁盘文件无法提供可靠的旧原版基线。 [基线格式](publishing-protocol.md) · [初始打包流程](packaging.md)
 
-`installed.json` 缺失时，程序以 `release-id: -1`、`version: "uninitialized"` 和空文件表处理当前实例。现有文件与新版内容一致时直接采用，内容不同时进入缺少基线的冲突选择。旧的清单外模组缺乏受管记录，会被保留。
+`installed.json` 缺失时，程序以 `release-id: -1`、`version: "uninitialized"` 和空文件表处理当前实例。现有文件与新版内容一致时直接采用，内容不同时进入缺少基线的冲突选择。清单外模组通常保留；与已选云端模组同 ID 时按联动规则禁用。
 
-保留 `installed.json` 能让客户端持续识别原受管文件、旧版本与玩家差异。版本字段和事务编号参与更新判断与中断恢复，应交由生成工具及客户端维护。
+保留 `installed.json` 及其引用的索引，才能持续识别原受管文件、旧版本与玩家差异。提交先写索引，再原子替换头文件；缺失或哈希不符的索引会阻止安装。未引用的旧索引目前保留，不受下载缓存清理影响。版本字段和事务编号参与更新判断与中断恢复，应交由生成工具及客户端维护。
 
 ## 常见问题
 
@@ -241,4 +246,4 @@ java -jar ModpackUpdate-updater-0.3.0-preview.4.jar repair "D:/Packs/MyNeoPack" 
 | 关闭更新后仍进入恢复窗口 | 查看是否存在上次安装留下的事务记录，完成恢复后再重新启动 |
 | 发现新版，游戏退出后提示版本不匹配 | 核对索引声明的 Minecraft、加载器类型和版本是否与实例完全一致，各平台依赖字段见 [发布协议](publishing-protocol.md) |
 
-首次发行时将 `config.json` 和生成的 `installed.json` 放进 `.mrpack` 的 `overrides/ModpackUpdate/config/`。已有实例的这两个文件由本地管理，后续发布中的同名配置会被保留目录规则跳过。 [打包流程](packaging.md)
+首次发行时将 `config.json`、生成的 `installed.json` 和其引用的 `file-indexes/*.json` 放进 `.mrpack` 的 `overrides/ModpackUpdate/config/`。已有实例的这些文件由本地管理，后续发布中的同名配置会被保留目录规则跳过。 [打包流程](packaging.md)

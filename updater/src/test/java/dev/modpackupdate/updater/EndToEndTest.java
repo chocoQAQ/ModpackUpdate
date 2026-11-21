@@ -31,13 +31,15 @@ class EndToEndTest {
     @TempDir Path root;
 
     @ParameterizedTest
-    @CsvSource({"fabric-loader,1.20.1,0.16.10,false", "neoforge,1.21.1,21.1.266,false",
-            "forge,1.20.1,47.4.28,false", "quilt-loader,1.21.1,0.30.2,false",
-            "fabric-loader,1.20.1,0.16.10,true", "neoforge,1.21.1,21.1.266,true"})
-    void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion, boolean fallback) throws Exception {
+    @CsvSource({"fabric-loader,1.20.1,0.16.10,false,false", "neoforge,1.21.1,21.1.266,false,false",
+            "forge,1.20.1,47.4.28,false,false", "quilt-loader,1.21.1,0.30.2,false,false",
+            "fabric-loader,1.20.1,0.16.10,true,false", "neoforge,1.21.1,21.1.266,true,false",
+            "fabric-loader,1.20.1,0.16.10,false,true", "neoforge,1.21.1,21.1.266,false,true"})
+    void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion,
+                                                                 boolean fallback, boolean compactRenamed) throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         root = root.toRealPath();
-        Path original = root.resolve("mods/ModpackUpdate.jar");
+        Path original = root.resolve(compactRenamed ? "mods/renamed-local-updater.jar" : "mods/ModpackUpdate.jar");
         Files.createDirectories(original.getParent());
         Files.write(original, jar("1", loaderType));
         String oldHash = FilesSupport.hash(original);
@@ -66,6 +68,14 @@ class EndToEndTest {
         Models.Release release = new Models.Release(1, "test", 2, "1.1.0", "", indexArtifact,
                 new Models.Overrides(false, null, List.of()), indexArtifact);
         responses.put("/latest", FilesSupport.JSON.toJson(release).getBytes(StandardCharsets.UTF_8));
+        if (compactRenamed) {
+            Path manifest = root.resolve("manifest.json");
+            FilesSupport.write(manifest, release);
+            responses.put("/manifest", Files.readAllBytes(manifest));
+            var entry = new Models.Release(2, "test", 2, "1.1.0", null, null, null, null,
+                    new Models.Artifact(base + "/manifest", FilesSupport.hash(manifest), Files.size(manifest)));
+            responses.put("/latest", FilesSupport.JSON.toJson(entry).getBytes(StandardCharsets.UTF_8));
+        }
         responses.put("/index", Files.readAllBytes(indexFile));
         responses.put("/mod", Files.readAllBytes(payload));
         Models.Config config = new Models.Config();
@@ -91,8 +101,9 @@ class EndToEndTest {
         installed.packId = "test";
         installed.releaseId = 1;
         installed.version = "1.0.0";
-        installed.files.put("mods/ModpackUpdate.jar", new Models.Baseline(oldHash, oldHash, false));
-        FilesSupport.write(root.resolve("ModpackUpdate/config/installed.json"), installed);
+        if (!compactRenamed) installed.files.put("mods/ModpackUpdate.jar", new Models.Baseline(oldHash, oldHash, false));
+        if (compactRenamed) InstalledStore.write(root, installed);
+        else FilesSupport.write(root.resolve("ModpackUpdate/config/installed.json"), installed);
         Path signal = root.resolve("ModpackUpdate/runtime/handoff-test");
         Files.createDirectories(signal.getParent());
         String classpath = Path.of(EndToEndTest.class.getProtectionDomain().getCodeSource().getLocation().toURI())
@@ -112,12 +123,15 @@ class EndToEndTest {
             assertTrue(updater.waitFor(25, TimeUnit.SECONDS), "Updater must finish after the simulated game exits");
             assertEquals(0, updater.exitValue(), Files.readString(root.resolve("updater.log")));
             assertEquals(0, game.exitValue(), Files.readString(root.resolve("game.log")));
-            assertEquals(newHash, FilesSupport.hash(original));
-            Models.Installed next = FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class);
+            assertEquals(newHash, FilesSupport.hash(root.resolve("mods/ModpackUpdate.jar")));
+            Models.Installed next = InstalledStore.read(root);
             assertEquals(fallback ? 1 : 2, next.releaseId);
             assertEquals(fallback, next.fullPackFallback);
             assertEquals(fallback, Files.exists(root.resolve("manual-confirm")), "Unnumbered fallback must require confirmation even in silent mode");
-            assertEquals(oldHash, FilesSupport.hash(root.resolve("ModpackUpdate/1.0.0/" + next.transactionId + "/mods/ModpackUpdate.jar")));
+            if (compactRenamed) {
+                assertFalse(Files.exists(original));
+                assertEquals(oldHash, FilesSupport.hash(original.resolveSibling(original.getFileName() + ".disable")));
+            } else assertEquals(oldHash, FilesSupport.hash(root.resolve("ModpackUpdate/1.0.0/" + next.transactionId + "/mods/ModpackUpdate.jar")));
         } finally {
             game.destroyForcibly();
             if (updater != null) updater.destroyForcibly();

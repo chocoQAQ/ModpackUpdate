@@ -200,7 +200,7 @@ class RiskFixTest {
         new Installer(root).recover(); // Recovery is repeatable.
         assertFalse(installer.pending());
         assertEquals(point.equals("committed") ? "new" : "old", Files.readString(root.resolve("config/a")));
-        var state = FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class);
+        var state = InstalledStore.read(root);
         assertEquals(point.equals("committed") ? 2 : 1, state.releaseId);
     }
 
@@ -352,7 +352,7 @@ class RiskFixTest {
             assertEquals(0, child.exitValue(), Files.readString(root.resolve("repair.log")));
             assertEquals(gameRunning ? "player" : "new", Files.readString(root.resolve("config/a")));
             assertFalse(new Installer(root).pending());
-            var next = FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class);
+            var next = InstalledStore.read(root);
             assertEquals(previous.releaseId, next.releaseId);
             assertEquals(gameRunning ? "" : "complete", gameRunning ? next.transactionId : next.installationStatus);
         } finally { if (child != null) child.destroyForcibly(); server.stop(0); }

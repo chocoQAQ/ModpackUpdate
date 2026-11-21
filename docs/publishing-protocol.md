@@ -1,8 +1,32 @@
-# 发布协议 v1
+# 发布协议 v2（兼容 v1）
 
 客户端配置的 `update-service-url` 指向当前发布的静态 JSON。服务只需接收一个 `.mrpack` 和版本公告，即可提取索引、派生客户端 overrides ZIP、生成元数据。初版客户端只消费这些文件，仓库不包含服务实现。
 
-## 最新发布元数据
+## 小型版本入口
+
+从 0.3.0-preview.5 开始，推荐 `update-service-url` 指向以下 `latest.json`。启动检查只需要包标识、发布编号、版本号和安装清单引用；没有新版时不下载安装清单、Modrinth 索引、overrides 或完整包。
+
+```json
+{
+  "protocol-version": 2,
+  "pack-id": "my-pack",
+  "release-id": 12,
+  "version": "1.2.0",
+  "manifest": {
+    "url": "https://updates.example.com/my-pack/12/manifest.json",
+    "sha512": "<128 位小写十六进制 SHA-512>",
+    "size": 12345
+  }
+}
+```
+
+入口上限 64 KiB，`manifest` 上限 16 MiB，实际入口通常不足 1 KiB。v2 入口不应包含 `announcement`、`index`、`overrides`、`full-pack`。发现候选更新后才下载并校验安装清单，以显示公告；玩家确认前不下载模组文件。安装清单与入口的 `pack-id`、`release-id`、`version` 必须完全一致。
+
+只增加一层整体安装清单，不按模组或 override 拆分小 JSON。安装清单复用以下 v1 完整元数据格式（`protocol-version: 1`），不能再次引用 `manifest`。包内 `modpackupdate.release.json` 的身份格式也继续为 `1`，与外部检查入口的协议版本分别定义。
+
+旧的 v1 入口仍可直接使用；旧客户端不能读取 v2，应先通过 v1 渠道发布新版 ModpackUpdate，再切换入口，或为旧客户端保留独立 v1 URL。`full-pack-url` 兜底仅在入口下载失败时启用；入口或安装清单校验失败、安装清单 URL 不可用不会静默换源。
+
+## 安装清单 manifest.json（兼容原 v1 元数据）
 
 以下哈希和大小是占位示例，发布时必须根据产物的真实字节填入。JSON 字段使用短横线命名。未知扩展字段可以忽略。
 
@@ -84,13 +108,13 @@ NeoForge 21.1.266 的索引依赖部分如下。
 }
 ```
 
-四个平台使用同一发布协议 v1。实例加载器由模组自动传给独立程序，作者为各个平台、游戏版本配置各自的更新源即可。Quilt 实例的索引声明 `quilt-loader`，即使包中包含 Fabric 模组，也不要同时声明 `fabric-loader`。安装前的重复模组 ID 检查优先读取 `quilt.mod.json`，没有该文件时读取 `fabric.mod.json`；Forge 读取 `META-INF/mods.toml`，NeoForge 读取 `META-INF/neoforge.mods.toml`。
+四个平台使用同一发布协议，均支持 v2 小型入口与 v1 完整清单。实例加载器由模组自动传给独立程序，作者为各个平台、游戏版本配置各自的更新源即可。Quilt 实例的索引声明 `quilt-loader`，即使包中包含 Fabric 模组，也不要同时声明 `fabric-loader`。安装前的重复模组 ID 检查优先读取 `quilt.mod.json`，没有该文件时读取 `fabric.mod.json`；Forge 读取 `META-INF/mods.toml`，NeoForge 读取 `META-INF/neoforge.mods.toml`。
 
 索引的客户端 `env` 为 `unsupported` 时跳过，为 `optional` 时保留既有安装选择，新增可选内容默认不选。缺省按 `required` 处理。
 
 先读取 `modrinth.index.json`，再按 `overrides/`、`client-overrides/` 的顺序覆盖同路径文件，得到客户端最终内容。`server-overrides/` 不进入客户端更新。派生 `overrides.zip` 已经合并两层，ZIP 内直接为 `config/...`、`mods/...` 等路径。压缩包内不再套一层 `overrides/`。
 
-最终 overrides 的文件大小、哈希直接附在发布元数据中，避免为每个 override 再发布一个文件。整个 overrides 集合无变动，或所有变动路径都受保护、被玩家跳过时，客户端不下载 ZIP。有需要安装的 override 时下载一次整包并复用，只提取选中的条目。
+最终 overrides 的文件大小、哈希直接附在安装清单中，避免为每个 override 再发布一个文件。整个 overrides 集合无变动，或所有变动路径都受保护、被玩家跳过时，客户端不下载 ZIP。有需要安装的 override 时下载一次整包并复用，只提取选中的条目。
 
 索引或 overrides 产物失败时，客户端下载 `full-pack`，从其中提取原始索引或合并后的客户端 override 条目，再按发布哈希验证。普通模组文件会依次尝试 `downloads` 中的地址。
 
@@ -104,11 +128,31 @@ NeoForge 21.1.266 的索引依赖部分如下。
 
 发布描述的是完整目标状态。协议不含删除命令。客户端根据旧 `installed.json` 识别消失的受管 JAR，并执行禁用。清单中消失的其他文件保留。旧 JAR 被同路径新版替换时，先移到 `ModpackUpdate/{旧版本}/{事务编号}/mods/`，选中删除旧模组选项则在整批提交成功后清除该备份。
 
+默认采用云端冲突操作；新增可选文件仍默认不选。采用新版模组时，客户端根据对应加载器的模组 ID 将其他文件名下的同 ID 本地 JAR 一并禁用，即使该文件没有旧基线。旧文件保留为 `.jar.disable`，无需额外复制，安装失败时参与同一事务回滚；取消新版模组则保留旧版。受保护文件不会被自动禁用。云端发布自身有重复 ID、或与其他保留的目标 JAR 仍冲突时拒绝安装。只读取顶层 `mods/*.jar` 的加载器元数据，不将整个目录逐个计算哈希；新增禁用操作仅对实际待禁用文件计算哈希。嵌套 JAR 和依赖关系仍交给加载器判断。
+
 `ModpackUpdate/` 是客户端保留目录，更新安装阶段忽略发布清单中的这些路径。首次发行可通过 `.mrpack` 的 overrides 携带作者配置与初始 `installed.json`，它们由启动器首次导入。
 
 ## 安装基线
 
-`ModpackUpdate/config/installed.json` 的记录由作者初始生成，之后由客户端维护。
+`ModpackUpdate/config/installed.json` 的记录由作者初始生成，之后由客户端维护。新版 `seed` 与成功安装写出 schema v2，小型头文件引用 `ModpackUpdate/config/file-indexes/{files-index}.json`，其中 `files-index` 是索引文件原始字节的 SHA-512：
+
+```json
+{
+  "schema-version": 2,
+  "pack-id": "my-pack",
+  "release-id": 12,
+  "version": "1.2.0",
+  "transaction-id": "",
+  "full-pack-fallback": false,
+  "full-pack-sequence-known": true,
+  "installation-status": "complete",
+  "files-index": "<128 位小写十六进制 SHA-512>"
+}
+```
+
+索引内容为 `{ "files": { "config/example.json": { "sha512": "…", "target-sha512": "…", "retained": false, "optional": false } } }`。启动检查只读取头文件；准备安装时验证并读取索引。先写入不可变索引，再原子替换头文件作为提交点；中断留下的未引用索引不会推进版本。目前保留旧索引，避免清理误伤恢复或人工回退。
+
+以下旧 schema v1 内联记录仍可读取，成功安装后自动迁移；迁移前检查时跳过 `files` 的反序列化，但仍需顺序扫描旧 JSON。首次发行必须携带头文件和所引用的索引，不能只复制 `installed.json`。
 
 ```json
 {
@@ -134,7 +178,7 @@ NeoForge 21.1.266 的索引依赖部分如下。
 
 `optional` 记录客户端可选属性，缺省为假。内容哈希不变时也会同步最新属性，必需改为可选不会沿用旧的必需标记。新版将可选文件改为必需时，即使文件哈希相同也重新检查安装选择。
 
-每个版本使用不可变 URL。先上传完整包、索引、overrides ZIP，再生成并上传当前版本元数据，最后原子切换 `latest.json`。保留旧版本元数据供已发行整合包生成初始基线。对同一 `release-id` 的内容修正应发布新编号。
+每个版本使用不可变 URL。先上传完整包、索引、overrides ZIP，再上传 `manifest.json`，最后生成小型 `release.json` 并原子切换 `latest.json`。保留旧版本元数据供已发行整合包生成初始基线。对同一 `release-id` 的内容修正应发布新编号。
 
 格式依据 [Modrinth Modpack Format](https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack)。
 

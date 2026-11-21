@@ -16,7 +16,6 @@ import java.util.zip.ZipFile;
 final class Installer {
     private final Path root;
     private final Path work;
-    private final Path state;
     private final Path journalFile;
     private final String loaderType;
     private final java.util.function.Consumer<String> checkpoint;
@@ -31,10 +30,57 @@ final class Installer {
         this.loaderType = loaderType;
         this.checkpoint = checkpoint;
         work = FilesSupport.resolve(root, "ModpackUpdate");
-        state = FilesSupport.resolve(root, "ModpackUpdate/config/installed.json");
         journalFile = FilesSupport.resolve(root, "ModpackUpdate/transaction.json");
     }
     boolean pending() { return Files.exists(journalFile); }
+
+    /** An adopted remote JAR owns its IDs, even when the local filename is unknown to the baseline. */
+    List<Models.Change> preferRemoteMods(List<Models.Change> changes, List<Models.Change> selected,
+                                         Map<String, Path> staged, Map<String, Models.Target> targets,
+                                         Models.Config config) throws Exception {
+        Map<String, String> remoteIds = new HashMap<>();
+        var selectedPaths = new HashSet<Path>();
+        for (Models.Change change : selected) {
+            selectedPaths.add(FilesSupport.relative(change.path()));
+            if (change.disable() || !FilesSupport.managedMod(change.path())) continue;
+            Path source = staged.getOrDefault(change.path(), FilesSupport.resolve(root, change.path()));
+            try (ZipFile zip = new ZipFile(source.toFile())) {
+                for (String id : ModMetadata.ids(zip, loaderType)) {
+                    String other = remoteIds.putIfAbsent(id, change.path());
+                    if (other != null && !other.equals(change.path())) throw new IOException("云端模组 ID 重复 " + id + ": " + other + " / " + change.path());
+                }
+            }
+        }
+        var result = new ArrayList<>(selected);
+        Path mods = FilesSupport.resolve(root, "mods");
+        if (remoteIds.isEmpty() || !Files.isDirectory(mods)) return result;
+        var targetPaths = FilesSupport.byPath(targets);
+        try (var files = Files.list(mods)) {
+            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".jar")).sorted().toList()) {
+                String path = "mods/" + file.getFileName();
+                if (selectedPaths.contains(FilesSupport.relative(path))) continue;
+                Path source = FilesSupport.resolve(root, path);
+                boolean replaced;
+                try (ZipFile zip = new ZipFile(source.toFile())) {
+                    replaced = ModMetadata.ids(zip, loaderType).stream().anyMatch(remoteIds::containsKey);
+                }
+                if (!replaced) continue;
+                if (FilesSupport.protectedPath(path, config)) throw new IOException("受保护模组与云端模组 ID 冲突，请取消新版或调整保护路径: " + path);
+                if (targetPaths.containsKey(FilesSupport.relative(path))) throw new IOException("云端目标或保留的目标文件存在重复模组 ID: " + path);
+                Models.Change disable = null;
+                for (Models.Change change : changes) {
+                    if (change.disable() && FilesSupport.relative(change.path()).equals(FilesSupport.relative(path))) {
+                        disable = change;
+                        break;
+                    }
+                }
+                if (disable == null) disable = new Models.Change(path, null, FilesSupport.hash(source), "由已选云端同 ID 模组替代");
+                result.add(disable);
+                System.out.println("采用云端模组，禁用同 ID 本地文件: " + path);
+            }
+        }
+        return result;
+    }
 
     List<Models.Change> reconcileSelection(List<Models.Change> changes, List<Models.Change> selected,
                                           Map<String, Path> staged) throws Exception {
@@ -136,7 +182,7 @@ final class Installer {
                 } finally { Files.deleteIfExists(temporary); }
             }
             next.transactionId = journal.id;
-            FilesSupport.write(state, next);
+            InstalledStore.write(root, next);
             checkpoint.accept("committed");
         } catch (Exception failure) {
             try { recover(); } catch (Exception recovery) { failure.addSuppressed(recovery); }
@@ -148,7 +194,7 @@ final class Installer {
     void recover() throws Exception {
         if (!pending()) return;
         Models.Journal journal = FilesSupport.read(journalFile, Models.Journal.class);
-        Models.Installed installed = Files.exists(state) ? FilesSupport.read(state, Models.Installed.class) : new Models.Installed();
+        Models.Installed installed = InstalledStore.header(root);
         if (journal.id.equals(installed.transactionId)) { cleanupCommitted(journal); return; }
         int started = journal.startedOperations < 0 ? journal.operations.size() : journal.startedOperations;
         if (started > journal.operations.size()) throw new IOException("事务进度无效");

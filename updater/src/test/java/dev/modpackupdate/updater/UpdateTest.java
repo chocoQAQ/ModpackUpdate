@@ -117,7 +117,7 @@ class UpdateTest {
         new Installer(root).install(previous, next, changes, Map.of(target.path(), source), false);
         assertEquals(target.sha512(), FilesSupport.hash(original));
         assertEquals(oldHash, FilesSupport.hash(root.resolve("ModpackUpdate/1.0.0/" + next.transactionId + "/mods/ModpackUpdate.jar")));
-        assertEquals(2, FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class).releaseId);
+        assertEquals(2, InstalledStore.read(root).releaseId);
         assertFalse(new Installer(root).pending());
     }
 
@@ -192,7 +192,7 @@ class UpdateTest {
         assertFalse(Files.exists(added));
         assertTrue(Files.exists(root.resolve("mods/old.jar")));
         assertFalse(Files.exists(backup));
-        assertEquals(previous.releaseId, FilesSupport.read(root.resolve("ModpackUpdate/config/installed.json"), Models.Installed.class).releaseId);
+        assertEquals(previous.releaseId, InstalledStore.read(root).releaseId);
     }
 
     @Test void rejectsTraversalAndWindowsAliasPaths() {

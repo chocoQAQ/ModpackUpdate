@@ -82,8 +82,7 @@ public final class Main {
             config = FilesSupport.read(configFile, Models.Config.class);
             if (!config.enable && !standalone) return 0;
             if (config.protectedPaths == null) throw new IOException("protected-paths 必须是数组");
-            Path state = FilesSupport.resolve(root, "ModpackUpdate/config/installed.json");
-            Models.Installed installed = Files.exists(state) ? FilesSupport.read(state, Models.Installed.class) : new Models.Installed();
+            Models.Installed installed = InstalledStore.header(root);
             validateInstalled(root, installed, config.packId);
             Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");
             Storage.cleanup(root, config.cacheMaxMib, config.backupRetentionCount);
@@ -97,6 +96,7 @@ public final class Main {
                     catch (Exception e) { throw new IllegalStateException("无法显示检查窗口", e); }
                 });
                 release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType, standalone);
+                if (release != null) release = protocol.details(release);
                 CheckSession.checkInterrupted();
                 if (check.cancelled()) return 0;
             } finally {
@@ -107,6 +107,8 @@ public final class Main {
                 if (standalone) ui.message("更新源没有可修复的当前版本或更新版本。", false);
                 return 0;
             }
+            installed = InstalledStore.read(root);
+            validateInstalled(root, installed, config.packId);
             if ((!config.silentUpdate || protocol.requiresConfirmation() || standalone)
                     && !ui.confirm(installed, release, protocol.requiresConfirmation())) return 0;
             ui.progress("正在等待游戏进程退出…");
@@ -129,10 +131,14 @@ public final class Main {
                 ui.progress(UpdateUi.Stage.DOWNLOAD, "已就绪 · " + change.path(), ++number, downloadCount);
             }
             var selected = installer.reconcileSelection(changes, selection.changes(), staged);
-            if (selected.size() != selection.changes().size()) {
-                ui.message("有新版模组未被采用，已同时保留 " + (selection.changes().size() - selected.size())
+            selected = installer.preferRemoteMods(changes, selected, staged, targets, config);
+            int preserved = 0;
+            for (Models.Change change : selection.changes()) if (change.disable() && !selected.contains(change)) preserved++;
+            if (preserved > 0) {
+                ui.message("有新版模组未被采用，已同时保留 " + preserved
                         + " 个无法确认已被替代的旧模组，避免只禁用旧版。", false);
             }
+            for (Models.Change change : selected) if (!changes.contains(change)) changes.add(change);
             ui.progress(UpdateUi.Stage.INSTALL, "安装文件并保存版本记录…", 0, 0);
             Models.Installed next = Planner.next(installed, release, targets, changes, selected, config);
             next.fullPackFallback = protocol.usingFallback();
@@ -183,7 +189,7 @@ public final class Main {
         return false;
     }
     private static void validateInstalled(Path root, Models.Installed installed, String packId) throws IOException {
-        if (installed.schemaVersion != 1 || installed.files == null || installed.packId == null
+        if ((installed.schemaVersion != 1 && installed.schemaVersion != 2) || installed.files == null || installed.packId == null
                 || (!installed.packId.isEmpty() && !installed.packId.equals(packId))) throw new IOException("本地安装记录不匹配");
         FilesSupport.byPath(installed.files);
         for (var entry : installed.files.entrySet()) {
@@ -199,7 +205,7 @@ public final class Main {
         if (Files.exists(state)) throw new IOException("installed.json 已存在，请使用全新打包目录生成基线");
         Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");
         Protocol protocol = new Protocol(new Downloads(30), cache);
-        Models.Release release = protocol.release(args[2], args[3]);
+        Models.Release release = protocol.details(protocol.release(args[2], args[3]));
         Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5], loaderType(args));
         Models.Config config = new Models.Config();
         config.enable = true;
@@ -214,7 +220,7 @@ public final class Main {
             if (target.optional() && !Files.exists(FilesSupport.resolve(root, target.path()))) continue;
             installed.files.put(target.path(), new Models.Baseline(target.sha512(), target.sha512(), false, target.optional()));
         }
-        FilesSupport.write(state, installed);
+        InstalledStore.write(root, installed);
         Path configFile = FilesSupport.resolve(root, "ModpackUpdate/config/config.json");
         if (!Files.exists(configFile)) FilesSupport.write(configFile, config);
         System.out.println("已生成 " + state + "。请将 config.json 的 update-service-url 指向正式更新入口。");

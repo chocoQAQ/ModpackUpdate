@@ -113,6 +113,13 @@ final class UpdateUi {
         if (config.silentUpdate && conflicts.isEmpty()) return new Selection(changes, config.deleteReplacedMods);
         return ui(() -> {
             boolean[] checked = new boolean[conflicts.size()];
+            int initiallySelected = 0;
+            for (int i = 0; i < conflicts.size(); i++) {
+                Models.Change change = conflicts.get(i);
+                // Keep newly offered optional files opt-in; other conflicts default to the remote operation.
+                checked[i] = change.disable() || !change.target().optional() || change.observedHash() != null;
+                if (checked[i]) initiallySelected++;
+            }
             AbstractTableModel model = new AbstractTableModel() {
                 final String[] columns = {"采用新版操作", "文件", "操作 / 原因"};
                 public int getRowCount() { return conflicts.size(); }
@@ -134,7 +141,7 @@ final class UpdateUi {
                 }
             };
             JPanel content = stack();
-            content.add(heading("安装确认", "选择需要覆盖的本地文件。"));
+            content.add(heading("安装确认", "默认采用云端文件；采用新版模组时，一并禁用其他同 ID 本地 JAR。"));
             content.add(Box.createVerticalStrut(22));
             JPanel summary = new JPanel(new GridLayout(1, 3, 12, 0));
             summary.setOpaque(false);
@@ -173,7 +180,7 @@ final class UpdateUi {
             } else {
                 JPanel toolbar = new JPanel(new BorderLayout());
                 toolbar.setOpaque(false);
-                JLabel selectionCount = label("已选 0 / " + conflicts.size() + " 项", 13, MUTED, false);
+                JLabel selectionCount = label("已选 " + initiallySelected + " / " + conflicts.size() + " 项", 13, MUTED, false);
                 model.addTableModelListener(event -> {
                     int count = 0;
                     for (boolean value : checked) if (value) count++;
@@ -193,7 +200,7 @@ final class UpdateUi {
                 content.add(Box.createVerticalStrut(10));
                 content.add(scroll(table, 740, 240));
                 content.add(Box.createVerticalStrut(10));
-                content.add(label("未勾选的文件保留本地版本。", 12, MUTED, false));
+                content.add(label("取消新版模组可保留旧版；同 ID 模组不能同时启用。可选新文件默认不选。", 12, MUTED, false));
             }
             content.add(Box.createVerticalStrut(18));
             JCheckBox delete = new JCheckBox("删除旧模组（不备份）", config.deleteReplacedMods);
