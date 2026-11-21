@@ -12,6 +12,8 @@ ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrin
 
 更新入口请求携带 `X-ModpackUpdate-Protocol-Version: 2`，服务可在同一个 URL 按客户端能力返回 v1/v2，无字段的旧客户端继续获取 v1。
 
+旧入口可通过 `changed` 返回新清单 URL，客户端自动保存更新地址，下次启动使用新服务。
+
 | 平台 | Minecraft | 加载器 | Java |
 | --- | --- | --- | --- |
 | Fabric | 1.20.1 | Fabric Loader 0.16.10+ | 17+ |

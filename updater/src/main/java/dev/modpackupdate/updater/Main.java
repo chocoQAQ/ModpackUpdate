@@ -89,19 +89,31 @@ public final class Main {
             Downloads downloads = new Downloads(config.timeoutSeconds);
             Protocol protocol = new Protocol(downloads, cache);
             Models.Release release;
+            String changedUrl = null;
             try (CheckSession check = new CheckSession(downloads, config.checkTimeoutSeconds)) {
                 Files.writeString(phase, Long.toString(check.deadline));
                 protocol.onFallback(() -> {
                     try { ui.checking(check::cancel); }
                     catch (Exception e) { throw new IllegalStateException("无法显示检查窗口", e); }
                 });
-                release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType, standalone);
+                try {
+                    release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType, standalone);
+                } catch (Protocol.ServiceChangedException changed) {
+                    changedUrl = changed.url;
+                    release = null;
+                }
                 if (release != null) release = protocol.details(release);
                 CheckSession.checkInterrupted();
                 if (check.cancelled()) return 0;
             } finally {
                 Files.writeString(phase, "interactive");
                 ui.closeChecking();
+            }
+            if (changedUrl != null) {
+                ServiceMigration.save(root, config, changedUrl);
+                System.out.println("更新服务地址已保存，下次启动时访问新地址。");
+                if (standalone) ui.message("更新服务地址已保存。请重新启动游戏或再次运行修复命令。", false);
+                return 0;
             }
             if (release == null) {
                 if (standalone) ui.message("更新源没有可修复的当前版本或更新版本。", false);

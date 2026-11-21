@@ -6,6 +6,8 @@
 
 从 0.3.0-preview.6 开始，更新入口请求自动携带 `X-ModpackUpdate-Protocol-Version: 2`，无需新增配置项。服务可在同一个 `update-service-url` 根据该字段返回 v1 或 v2；无字段请求应返回 v1，让旧客户端先完成更新器升级。纯静态 v1 服务仍兼容。具体请求和缓存规则见 [发布协议](publishing-protocol.md#请求协议版本与同-url-迁移)。
 
+更新入口返回 `{"changed":"https://新服务/清单.json"}` 时，客户端会校验并原子保存新的 `update-service-url`，本次继续游戏，下次启动才访问新地址。其余设置和安装记录保留，`full-pack-url` 不会随之修改；无效通知或保存失败会记录错误并保留原配置。详情见 [服务地址迁移](publishing-protocol.md#服务地址迁移changed)。
+
 配置、安装记录及文件基线索引统一位于实例的 `ModpackUpdate/config/` 下。使用版本隔离的启动器时，应以该实例实际使用的游戏目录为准。
 
 ```text

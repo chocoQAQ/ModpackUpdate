@@ -34,7 +34,17 @@ final class Protocol {
                 Map.of(REQUEST_PROTOCOL_HEADER, REQUEST_PROTOCOL_VERSION)); }
         catch (InterruptedException e) { throw e; }
         catch (Exception e) { throw new ReleaseUnavailableException(e); }
-        Models.Release release = FilesSupport.read(file, Models.Release.class);
+        JsonObject json = FilesSupport.read(file, JsonObject.class);
+        if (json.has("changed")) {
+            if (Files.size(file) > 64 * 1024) throw new IOException("服务迁移通知大小超限");
+            var changed = json.get("changed");
+            if (!changed.isJsonPrimitive() || !changed.getAsJsonPrimitive().isString()
+                    || changed.getAsString().isBlank()) throw new IOException("changed 必须是非空 URL 字符串");
+            String nextUrl = changed.getAsString();
+            Downloads.allowed(nextUrl);
+            throw new ServiceChangedException(nextUrl);
+        }
+        Models.Release release = FilesSupport.JSON.fromJson(json, Models.Release.class);
         validateRelease(release, packId);
         if (release.protocolVersion() == 2 && Files.size(file) > 64 * 1024) throw new IOException("v2 版本入口大小超限");
         return release;
@@ -58,6 +68,14 @@ final class Protocol {
 
     private static final class ReleaseUnavailableException extends IOException {
         ReleaseUnavailableException(Exception cause) { super("无法获取更新接口清单", cause); }
+    }
+
+    static final class ServiceChangedException extends IOException {
+        final String url;
+        ServiceChangedException(String url) {
+            super("更新服务已迁移，请使用新清单地址: " + url);
+            this.url = url;
+        }
     }
 
     boolean usingFallback() { return fallback != null; }

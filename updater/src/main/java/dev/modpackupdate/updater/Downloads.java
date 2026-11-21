@@ -32,7 +32,7 @@ final class Downloads {
         client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(this.timeout))
                 .followRedirects(HttpClient.Redirect.NEVER).build();
     }
-    private URI allowed(String url) throws IOException {
+    static URI allowed(String url) throws IOException {
         try {
             URI uri = URI.create(url);
             boolean loopback = "localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost());

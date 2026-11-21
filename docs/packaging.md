@@ -62,6 +62,8 @@ v2 解析从 0.3.0-preview.5 开始支持；0.3.0-preview.6 新增请求头 `X-M
 
 ## 更新前自检
 
+服务换域名或清单路径时，可在旧入口返回 `changed` 通知，由支持该功能的客户端保存新 URL，下次启动生效。兼容旧客户端的部署顺序、完整示例与保留配置规则见 [服务地址迁移](publishing-protocol.md#服务地址迁移changed)。
+
 - `.mrpack` 的 `versionId` 与发布 `version` 一致。
 - 内嵌 `modpackupdate.release.json` 的身份与编号和接口一致；所有来源共用递增序列。
 - Minecraft、加载器类型和加载器版本与需要更新的实例一致。
