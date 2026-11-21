@@ -44,4 +44,36 @@ class InstalledStoreTest {
         assertEquals("committed", InstalledStore.header(root).transactionId);
         assertTrue(InstalledStore.read(root).files.isEmpty());
     }
+
+    @Test void recoveryKeepsJournalUntilCommittedIndexIsRestored() throws Exception {
+        Path destination = root.resolve("config/example.txt");
+        Files.createDirectories(destination.getParent());
+        Files.writeString(destination, "old");
+        var previous = new Models.Installed();
+        String oldHash = FilesSupport.hash(destination);
+        previous.files.put("config/example.txt", new Models.Baseline(oldHash, oldHash, false));
+        InstalledStore.write(root, previous);
+        Path payload = root.resolve("ModpackUpdate/downloads/new");
+        Files.createDirectories(payload.getParent());
+        Files.writeString(payload, "new");
+        var target = new Models.Target("config/example.txt", FilesSupport.hash(payload), Files.size(payload), java.util.List.of(), true, false);
+        var change = new Models.Change(target.path(), target, oldHash, null);
+        var next = new Models.Installed();
+        next.releaseId = 2;
+        next.files.put(target.path(), new Models.Baseline(target.sha512(), target.sha512(), false));
+        var installer = new Installer(root, "fabric-loader", step -> {
+            if (step.equals("committed")) throw new AssertionError("simulated crash after commit");
+        });
+        assertThrows(AssertionError.class, () -> installer.install(previous, next, java.util.List.of(change), java.util.Map.of(target.path(), payload), true));
+        Path index = root.resolve("ModpackUpdate/config/file-indexes/" + next.filesIndex + ".json");
+        byte[] goodIndex = Files.readAllBytes(index);
+        Files.delete(index);
+        assertThrows(Exception.class, installer::recover);
+        assertTrue(installer.pending());
+        assertEquals("new", Files.readString(destination));
+        Files.write(index, goodIndex);
+        installer.recover();
+        assertFalse(installer.pending());
+        assertEquals(2, InstalledStore.read(root).releaseId);
+    }
 }

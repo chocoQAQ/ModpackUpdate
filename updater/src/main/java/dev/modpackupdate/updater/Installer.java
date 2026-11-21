@@ -195,7 +195,12 @@ final class Installer {
         if (!pending()) return;
         Models.Journal journal = FilesSupport.read(journalFile, Models.Journal.class);
         Models.Installed installed = InstalledStore.header(root);
-        if (journal.id.equals(installed.transactionId)) { cleanupCommitted(journal); return; }
+        if (journal.id.equals(installed.transactionId)) {
+            // A committed v2 header must still have its verified baseline before backups can be discarded.
+            if (installed.schemaVersion == 2) InstalledStore.read(root);
+            cleanupCommitted(journal);
+            return;
+        }
         int started = journal.startedOperations < 0 ? journal.operations.size() : journal.startedOperations;
         if (started > journal.operations.size()) throw new IOException("事务进度无效");
         for (int index = started - 1; index >= 0; index--) {
