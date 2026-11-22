@@ -67,7 +67,7 @@ final class Storage {
         try (var versions = Files.list(work)) {
             for (Path version : versions.toList()) {
                 if (!Files.isDirectory(version, LinkOption.NOFOLLOW_LINKS)
-                        || List.of("config", "runtime", "downloads").contains(version.getFileName().toString().toLowerCase(java.util.Locale.ROOT))) continue;
+                        || List.of("config", "runtime", "downloads", "inbox", "imported").contains(version.getFileName().toString().toLowerCase(java.util.Locale.ROOT))) continue;
                 FilesSupport.resolve(root, FilesSupport.portable(root.relativize(version)));
                 try (var transactions = Files.list(version)) {
                     for (Path directory : transactions.toList()) {
@@ -99,7 +99,7 @@ final class Storage {
 
     private static boolean cacheFile(String name) {
         return name.matches("[0-9a-f]{128}(?:\\.part|\\.extract)?") || name.equals("fallback.mrpack.part")
-                || name.equals("fallback-index.json") || name.matches("install-.*\\.tmp");
+                || name.equals("fallback-index.json") || name.matches("(?:install|local)-.*\\.tmp");
     }
     private static long modified(Path path) {
         try { return Files.getLastModifiedTime(path).toMillis(); } catch (IOException e) { return Long.MAX_VALUE; }

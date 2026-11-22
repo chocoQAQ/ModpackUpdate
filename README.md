@@ -14,6 +14,8 @@ ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrin
 
 旧入口可通过 `changed` 返回新清单 URL，客户端自动保存更新地址，下次启动使用新服务。
 
+将普通或完整离线 `.mrpack` 放入 `ModpackUpdate/inbox/`，启动时可确认本地更新；安装成功后归档至 `ModpackUpdate/imported/`。离线包沿用完整包兜底格式，打包方式见下方文档。
+
 | 平台 | Minecraft | 加载器 | Java |
 | --- | --- | --- | --- |
 | Fabric | 1.20.1 | Fabric Loader 0.16.10+ | 17+ |
@@ -29,6 +31,7 @@ ModpackUpdate 是一个 Minecraft 客户端整合包更新模组，支持 Modrin
 - [配置文件说明](docs/configuration.md)
 - [更新发布协议](docs/publishing-protocol.md)
 - [整合包打包流程](docs/packaging.md)
+- [本地更新与离线包打包](docs/local-updates.md)
 - [多版本构建说明](docs/building.md)
 - [main 分支实现说明（0.3.0-preview.2）](docs/implementation-main.md)
 - [main 分支代码审查（2026-11-19）](docs/review-main-2026-11-19.md)

@@ -83,6 +83,21 @@ final class Protocol {
     boolean requiresConfirmation() { return confirmationRequired; }
     void onFallback(Runnable action) { fallbackStarted = action; }
 
+    Models.Release local(Path archive, String name, Models.Config config, Models.Installed installed,
+                         Path root, String minecraft, String loader, String loaderType) throws Exception {
+        resolved = null;
+        resolvedEntry = null;
+        fallback = FullPackFallback.read(archive, cache, config, installed, root, minecraft, loader, loaderType,
+                "本地更新包：" + name + "\n请确认文件来自可信的整合包作者。普通包缺失的内容可能需要联网下载。");
+        Models.Release release = fallback.release();
+        if (fallback.sequenceKnown() && (release.releaseId() < installed.releaseId
+                || (release.releaseId() == installed.releaseId && !release.version().equals(installed.version)))) {
+            throw new IOException("本地包发布编号较旧或同编号版本不一致，拒绝降级");
+        }
+        confirmationRequired = !fallback.sequenceKnown() || (installed.fullPackFallback && !installed.fullPackSequenceKnown);
+        return release;
+    }
+
     Models.Release findUpdate(Models.Config config, Models.Installed installed, Path root,
                               String minecraft, String loader, String loaderType) throws Exception {
         return findUpdate(config, installed, root, minecraft, loader, loaderType, false);
@@ -198,7 +213,10 @@ final class Protocol {
             for (String existing : result.keySet()) {
                 if (!existing.equals(file.path()) && existing.equalsIgnoreCase(file.path())) throw new IOException("路径大小写冲突");
             }
-            result.put(file.path(), new Models.Target(file.path(), file.sha512(), file.size(), List.of(), true, false));
+            Models.Target indexed = result.get(file.path());
+            // A bundled copy of the indexed bytes retains the optional choice of the original Modrinth file.
+            boolean optional = indexed != null && indexed.optional() && indexed.sha512().equals(file.sha512()) && indexed.size() == file.size();
+            result.put(file.path(), new Models.Target(file.path(), file.sha512(), file.size(), List.of(), true, optional));
         }
         FilesSupport.validateFilePaths(result.keySet());
         return result;

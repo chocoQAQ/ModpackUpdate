@@ -31,12 +31,16 @@ class EndToEndTest {
     @TempDir Path root;
 
     @ParameterizedTest
-    @CsvSource({"fabric-loader,1.20.1,0.16.10,false,false", "neoforge,1.21.1,21.1.266,false,false",
-            "forge,1.20.1,47.4.28,false,false", "quilt-loader,1.21.1,0.30.2,false,false",
-            "fabric-loader,1.20.1,0.16.10,true,false", "neoforge,1.21.1,21.1.266,true,false",
-            "fabric-loader,1.20.1,0.16.10,false,true", "neoforge,1.21.1,21.1.266,false,true"})
+    @CsvSource({"fabric-loader,1.20.1,0.16.10,false,false,0", "neoforge,1.21.1,21.1.266,false,false,0",
+            "forge,1.20.1,47.4.28,false,false,0", "quilt-loader,1.21.1,0.30.2,false,false,0",
+            "fabric-loader,1.20.1,0.16.10,true,false,0", "neoforge,1.21.1,21.1.266,true,false,0",
+            "fabric-loader,1.20.1,0.16.10,false,true,0", "neoforge,1.21.1,21.1.266,false,true,0",
+            "fabric-loader,1.20.1,0.16.10,false,true,1", "neoforge,1.21.1,21.1.266,false,true,1",
+            "forge,1.20.1,47.4.28,false,true,1", "quilt-loader,1.21.1,0.30.2,false,true,1",
+            "fabric-loader,1.20.1,0.16.10,false,false,2", "fabric-loader,1.20.1,0.16.10,false,false,3",
+            "fabric-loader,1.20.1,0.16.10,false,false,4"})
     void independentUpdaterWaitsForLockedGameJarThenUpdatesItself(String loaderType, String minecraft, String loaderVersion,
-                                                                 boolean fallback, boolean compactRenamed) throws Exception {
+                                                                 boolean fallback, boolean compactRenamed, int localMode) throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         root = root.toRealPath();
         Path original = root.resolve(compactRenamed ? "mods/renamed-local-updater.jar" : "mods/ModpackUpdate.jar");
@@ -47,8 +51,12 @@ class EndToEndTest {
         Files.write(payload, jar("2", loaderType));
         String newHash = FilesSupport.hash(payload);
         Map<String, byte[]> responses = new HashMap<>();
+        var metadataRequests = new java.util.concurrent.atomic.AtomicInteger();
+        var payloadRequests = new java.util.concurrent.atomic.AtomicInteger();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
+            if (exchange.getRequestURI().getPath().equals("/mod")) payloadRequests.incrementAndGet();
+            else metadataRequests.incrementAndGet();
             byte[] body = responses.get(exchange.getRequestURI().getPath());
             if (body == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
             exchange.sendResponseHeaders(200, body.length);
@@ -79,7 +87,7 @@ class EndToEndTest {
         responses.put("/index", Files.readAllBytes(indexFile));
         responses.put("/mod", Files.readAllBytes(payload));
         Models.Config config = new Models.Config();
-        config.enable = true;
+        config.enable = localMode == 0;
         config.silentUpdate = true;
         config.packId = "test";
         config.updateServiceUrl = base + (fallback ? "/unavailable" : "/latest");
@@ -95,6 +103,22 @@ class EndToEndTest {
                 zip.closeEntry();
             }
             responses.put("/pack", bytes.toByteArray());
+        }
+        Path localPackage = root.resolve("ModpackUpdate/inbox/01-update.mrpack");
+        if (localMode > 0) {
+            Files.createDirectories(localPackage.getParent());
+            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(localPackage))) {
+                zip.putNextEntry(new ZipEntry("modrinth.index.json"));
+                zip.write(Files.readAllBytes(indexFile)); zip.closeEntry();
+                zip.putNextEntry(new ZipEntry("modpackupdate.release.json"));
+                zip.write(FilesSupport.JSON.toJson(new Models.PackRelease(1, "test", 2, "1.1.0")).getBytes(StandardCharsets.UTF_8)); zip.closeEntry();
+                if (localMode == 1 || localMode == 3) {
+                    zip.putNextEntry(new ZipEntry("overrides/mods/ModpackUpdate.jar"));
+                    zip.write(Files.readAllBytes(payload)); zip.closeEntry();
+                }
+            }
+            if (loaderType.equals("forge")) Files.copy(localPackage, localPackage.resolveSibling("99-unselected.mrpack"));
+            if (localMode == 4) responses.remove("/mod");
         }
         FilesSupport.write(root.resolve("ModpackUpdate/config/config.json"), config);
         Models.Installed installed = new Models.Installed();
@@ -117,17 +141,39 @@ class EndToEndTest {
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             while (!Files.exists(root.resolve("game-ready")) && System.nanoTime() < deadline) Thread.sleep(30);
             assertTrue(Files.exists(root.resolve("game-ready")));
-            updater = new ProcessBuilder(java, "-cp", classpath, AutoUpdater.class.getName(),
+            updater = new ProcessBuilder(java, "-Dtest.skip-local=" + (localMode == 3), "-cp", classpath, AutoUpdater.class.getName(),
                     "check", root.toString(), Long.toString(game.pid()), signal.toString(), minecraft, loaderVersion, loaderType)
                     .redirectErrorStream(true).redirectOutput(root.resolve("updater.log").toFile()).start();
             assertTrue(updater.waitFor(25, TimeUnit.SECONDS), "Updater must finish after the simulated game exits");
+            if (localMode == 3 || localMode == 4) {
+                assertEquals(localMode == 3 ? 0 : 1, updater.exitValue(), Files.readString(root.resolve("updater.log")));
+                assertTrue(Files.exists(localPackage));
+                assertEquals(oldHash, FilesSupport.hash(original));
+                assertEquals(1, InstalledStore.read(root).releaseId);
+                assertFalse(new Installer(root).pending());
+                assertEquals(0, metadataRequests.get());
+                if (localMode == 3) {
+                    assertTrue(game.isAlive());
+                    assertFalse(Files.exists(signal));
+                    assertEquals(0, payloadRequests.get());
+                }
+                return;
+            }
             assertEquals(0, updater.exitValue(), Files.readString(root.resolve("updater.log")));
             assertEquals(0, game.exitValue(), Files.readString(root.resolve("game.log")));
             assertEquals(newHash, FilesSupport.hash(root.resolve("mods/ModpackUpdate.jar")));
             Models.Installed next = InstalledStore.read(root);
             assertEquals(fallback ? 1 : 2, next.releaseId);
-            assertEquals(fallback, next.fullPackFallback);
-            assertEquals(fallback, Files.exists(root.resolve("manual-confirm")), "Unnumbered fallback must require confirmation even in silent mode");
+            assertEquals(fallback || localMode > 0, next.fullPackFallback);
+            assertEquals(fallback || localMode > 0, Files.exists(root.resolve("manual-confirm")), "Fallback and local imports must require confirmation as appropriate");
+            if (localMode > 0) {
+                assertFalse(Files.exists(localPackage));
+                assertNotNull(next.localImport);
+                assertEquals(next.localImport.sha512(), FilesSupport.hash(root.resolve(next.localImport.archivedPath())));
+                assertEquals(0, metadataRequests.get());
+                assertEquals(localMode == 1 ? 0 : 1, payloadRequests.get());
+                if (loaderType.equals("forge")) assertTrue(Files.exists(localPackage.resolveSibling("99-unselected.mrpack")));
+            }
             if (compactRenamed) {
                 assertFalse(Files.exists(original));
                 assertEquals(oldHash, FilesSupport.hash(original.resolveSibling(original.getFileName() + ".disable")));
@@ -188,11 +234,13 @@ class EndToEndTest {
             for (Component component : container.getComponents()) {
                 if (component instanceof JOptionPane pane) pane.setValue(JOptionPane.OK_OPTION);
                 else if (component instanceof javax.swing.JButton button && "关闭".equals(button.getText())) button.doClick();
-                else if (component instanceof javax.swing.JButton button && "更新并退出游戏".equals(button.getText())) {
+                else if (component instanceof javax.swing.JButton button && "更新并退出游戏".equals(button.getText()) && !Boolean.getBoolean("test.skip-local")) {
                     try { Files.writeString(instance.resolve("manual-confirm"), "confirmed"); }
                     catch (Exception e) { throw new RuntimeException(e); }
                     button.doClick();
                 }
+                else if (component instanceof javax.swing.JButton button && "跳过并继续游戏".equals(button.getText()) && Boolean.getBoolean("test.skip-local")) button.doClick();
+                else if (component instanceof javax.swing.JButton button && "检查所选更新包".equals(button.getText())) button.doClick();
                 else if (component instanceof javax.swing.JButton button && "开始安装".equals(button.getText())) button.doClick();
                 else if (repair && component instanceof javax.swing.JButton button && "全选".equals(button.getText())) button.doClick();
                 else if (component instanceof Container child) dismiss(child);

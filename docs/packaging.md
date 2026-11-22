@@ -1,5 +1,7 @@
 # 打包与服务派生流程
 
+需要通过文件分发更新时，使用同一 `.mrpack` 格式，按 [本地更新与离线包打包](local-updates.md) 收齐包内文件即可；客户端从 `ModpackUpdate/inbox/` 导入，无需单独发布 JSON 入口。
+
 作者先通过支持 Modrinth 的启动器导出 `.mrpack`。将 ModpackUpdate 纳入整合包，推荐稳定目标文件名 `mods/ModpackUpdate.jar`，并在 `overrides/ModpackUpdate/config/config.json` 中设置 pack ID 和更新地址。
 
 ## 服务收到一个压缩包后的操作

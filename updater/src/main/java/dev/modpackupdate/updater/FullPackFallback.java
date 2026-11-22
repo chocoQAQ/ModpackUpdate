@@ -31,6 +31,14 @@ record FullPackFallback(Path archive, Models.Release release, Map<String, Models
             archive = cache.resolve(FilesSupport.hash(part));
             FilesSupport.replace(part, archive);
         } finally { Files.deleteIfExists(part); }
+        return read(archive, cache, config, installed, root, minecraft, loader, loaderType,
+                "更新接口不可用，正在使用完整整合包兜底源。");
+    }
+
+    static FullPackFallback read(Path archive, Path cache, Models.Config config, Models.Installed installed,
+                                 Path root, String minecraft, String loader, String loaderType, String description) throws Exception {
+        if (config.packId == null || config.packId.isBlank()) throw new IOException("请先在配置中设置 pack-id");
+        Files.createDirectories(cache);
         Path index = cache.resolve("fallback-index.json");
         var entries = new LinkedHashMap<String, String>();
         var files = new ArrayList<Models.OverrideFile>();
@@ -108,7 +116,7 @@ record FullPackFallback(Path archive, Models.Release release, Map<String, Models
                 if (total != entry.getSize()) throw new IOException("ZIP 文件大小不一致");
                 files.add(new Models.OverrideFile(item.getKey(), HexFormat.of().formatHex(digest.digest()), total));
             }
-            String announcement = "更新接口不可用，正在使用完整整合包兜底源。";
+            String announcement = description;
             if (json.has("summary") && !json.get("summary").isJsonNull()) announcement += "\n\n" + json.get("summary").getAsString();
             var release = new Models.Release(1, config.packId, releaseId, version, announcement,
                     null, new Models.Overrides(!files.isEmpty(), null, files), null);

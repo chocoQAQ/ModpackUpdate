@@ -59,6 +59,8 @@ public final class Main {
         boolean recovery = installer.pending();
         UpdateUi ui = new UpdateUi();
         boolean handedOff = false;
+        boolean localAttempt = false;
+        LocalImports.Prepared local = null;
         Models.Config config = null;
         Path phase = signal.resolveSibling(signal.getFileName() + ".phase");
         try {
@@ -74,40 +76,64 @@ public final class Main {
                 if (!standalone) handoff(signal, parentId);
                 handedOff = true;
                 installer.recover();
+                LocalImports.finish(root, InstalledStore.header(root));
                 ui.message("已恢复上次安装状态，请从启动器重新启动游戏。", false);
                 return 0;
             }
             Path configFile = FilesSupport.resolve(root, "ModpackUpdate/config/config.json");
             if (!Files.exists(configFile)) FilesSupport.write(configFile, new Models.Config());
             config = FilesSupport.read(configFile, Models.Config.class);
-            if (!config.enable && !standalone) return 0;
+            var packages = LocalImports.list(root);
+            if (!config.enable && !standalone && packages.isEmpty()) return 0;
             if (config.protectedPaths == null) throw new IOException("protected-paths 必须是数组");
             Models.Installed installed = InstalledStore.header(root);
             validateInstalled(root, installed, config.packId);
+            LocalImports.finish(root, installed);
+            packages = LocalImports.list(root);
+            if (!config.enable && !standalone && packages.isEmpty()) return 0;
             Path cache = FilesSupport.resolve(root, "ModpackUpdate/downloads");
             Storage.cleanup(root, config.cacheMaxMib, config.backupRetentionCount);
             Downloads downloads = new Downloads(config.timeoutSeconds);
             Protocol protocol = new Protocol(downloads, cache);
             Models.Release release;
             String changedUrl = null;
-            try (CheckSession check = new CheckSession(downloads, config.checkTimeoutSeconds)) {
-                Files.writeString(phase, Long.toString(check.deadline));
-                protocol.onFallback(() -> {
-                    try { ui.checking(check::cancel); }
-                    catch (Exception e) { throw new IllegalStateException("无法显示检查窗口", e); }
-                });
-                try {
-                    release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType, standalone);
-                } catch (Protocol.ServiceChangedException changed) {
-                    changedUrl = changed.url;
-                    release = null;
-                }
-                if (release != null) release = protocol.details(release);
-                CheckSession.checkInterrupted();
-                if (check.cancelled()) return 0;
-            } finally {
+            if (!packages.isEmpty()) {
                 Files.writeString(phase, "interactive");
-                ui.closeChecking();
+                Path chosen = ui.chooseLocal(packages);
+                if (chosen == null) return 0;
+                localAttempt = true;
+                try (CheckSession check = new CheckSession(downloads, config.checkTimeoutSeconds)) {
+                    Files.writeString(phase, Long.toString(check.deadline));
+                    ui.checking(check::cancel, true);
+                    local = LocalImports.prepare(root, chosen);
+                    release = protocol.local(local.archive(), chosen.getFileName().toString(), config, installed,
+                            root, args[4], args[5], loaderType);
+                    CheckSession.checkInterrupted();
+                    if (check.cancelled()) return 0;
+                } finally {
+                    Files.writeString(phase, "interactive");
+                    ui.closeChecking();
+                }
+            } else {
+                try (CheckSession check = new CheckSession(downloads, config.checkTimeoutSeconds)) {
+                    Files.writeString(phase, Long.toString(check.deadline));
+                    protocol.onFallback(() -> {
+                        try { ui.checking(check::cancel); }
+                        catch (Exception e) { throw new IllegalStateException("无法显示检查窗口", e); }
+                    });
+                    try {
+                        release = protocol.findUpdate(config, installed, root, args[4], args[5], loaderType, standalone);
+                    } catch (Protocol.ServiceChangedException changed) {
+                        changedUrl = changed.url;
+                        release = null;
+                    }
+                    if (release != null) release = protocol.details(release);
+                    CheckSession.checkInterrupted();
+                    if (check.cancelled()) return 0;
+                } finally {
+                    Files.writeString(phase, "interactive");
+                    ui.closeChecking();
+                }
             }
             if (changedUrl != null) {
                 ServiceMigration.save(root, config, changedUrl);
@@ -121,7 +147,7 @@ public final class Main {
             }
             installed = InstalledStore.read(root);
             validateInstalled(root, installed, config.packId);
-            if ((!config.silentUpdate || protocol.requiresConfirmation() || standalone)
+            if ((local != null || !config.silentUpdate || protocol.requiresConfirmation() || standalone)
                     && !ui.confirm(installed, release, protocol.requiresConfirmation())) return 0;
             ui.progress("正在等待游戏进程退出…");
             if (!standalone) handoff(signal, parentId);
@@ -129,7 +155,7 @@ public final class Main {
             ui.progress("读取整合包索引并检查游戏版本…");
             Map<String, Models.Target> targets = protocol.targets(release, root, args[4], args[5], loaderType);
             ui.progress("检查即将变更的文件…");
-            var changes = Planner.plan(root, config, installed, targets, standalone);
+            var changes = Planner.plan(root, config, installed, targets, standalone || local != null);
             UpdateUi.Selection selection = ui.choose(changes, config);
             if (selection == null) return 0;
             Map<String, Path> staged = new LinkedHashMap<>();
@@ -155,15 +181,18 @@ public final class Main {
             Models.Installed next = Planner.next(installed, release, targets, changes, selected, config);
             next.fullPackFallback = protocol.usingFallback();
             next.fullPackSequenceKnown = protocol.sequenceKnown();
+            if (local != null) next.localImport = local.receipt();
             installer.install(installed, next, selected, staged, selection.deleteReplacedMods());
+            String archiveWarning = local == null ? null : LocalImports.finish(root, next);
             long retained = next.files.values().stream().filter(Models.Baseline::retained).count();
             ui.message((retained == 0 ? "已完整安装 " : "已处理版本（保留差异） ") + release.version()
-                    + "。\n保留本地差异 " + retained + " 项。\n可使用 repair 命令重新检查。\n请从启动器重新启动游戏。", false);
+                    + "。\n保留本地差异 " + retained + " 项。\n可使用 repair 命令重新检查。\n请从启动器重新启动游戏。"
+                    + (local == null ? "" : archiveWarning == null ? "\n本地更新包已归档至 ModpackUpdate/imported/。" : "\n" + archiveWarning), false);
             return 0;
         } catch (Exception e) {
             e.printStackTrace();
             if (!handedOff && (e instanceof java.io.InterruptedIOException || e instanceof InterruptedException)) return recovery ? 20 : 0;
-            if (handedOff || standalone) {
+            if (handedOff || standalone || localAttempt) {
                 try { ui.message("更新失败\n" + e.getMessage() + "\n详细记录见 ModpackUpdate/runtime/ 下的日志。", true); }
                 catch (Exception unavailable) { unavailable.printStackTrace(); }
             }

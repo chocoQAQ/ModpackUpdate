@@ -55,6 +55,10 @@ final class UpdateUi {
     }
 
     void checking(Runnable cancel) throws Exception {
+        checking(cancel, false);
+    }
+
+    void checking(Runnable cancel, boolean local) throws Exception {
         ui(() -> {
             checking = new JFrame("ModpackUpdate · 检查完整包");
             checking.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -62,7 +66,7 @@ final class UpdateUi {
                 @Override public void windowClosing(java.awt.event.WindowEvent event) { cancel.run(); }
             });
             JPanel content = stack();
-            content.add(heading("检查完整整合包", "更新接口暂不可用，正在下载并检查备用整合包。"));
+            content.add(heading("检查完整整合包", local ? "正在复制并校验本地更新包。" : "更新接口暂不可用，正在下载并检查备用整合包。"));
             content.add(Box.createVerticalStrut(20));
             content.add(note("可以跳过本次检查；尚未修改游戏文件。"));
             JButton skip = button("跳过检查", false);
@@ -74,6 +78,22 @@ final class UpdateUi {
             checking.setLocationRelativeTo(null);
             checking.setVisible(true);
             return null;
+        });
+    }
+
+    java.nio.file.Path chooseLocal(List<java.nio.file.Path> files) throws Exception {
+        if (files.size() == 1) return files.get(0);
+        return ui(() -> {
+            JPanel content = stack();
+            content.add(heading("选择本地更新包", "inbox 中有多个包，请选择要检查的文件。"));
+            content.add(Box.createVerticalStrut(20));
+            JComboBox<String> choices = new JComboBox<>(files.stream().map(path -> path.getFileName().toString()).toArray(String[]::new));
+            choices.setFont(BODY);
+            content.add(choices);
+            content.add(Box.createVerticalStrut(20));
+            content.add(note("检查后还需确认版本。取消将继续游戏，保留所有本地包。"));
+            return dialog(null, "选择本地更新包", content, "检查所选更新包", "跳过并继续游戏", 720)
+                    ? files.get(choices.getSelectedIndex()) : null;
         });
     }
 

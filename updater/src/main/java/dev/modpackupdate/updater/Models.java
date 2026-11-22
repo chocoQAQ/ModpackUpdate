@@ -40,8 +40,10 @@ final class Models {
         boolean fullPackSequenceKnown = false;
         String installationStatus = "complete";
         String filesIndex;
+        ImportReceipt localImport;
         Map<String, Baseline> files = new LinkedHashMap<>();
     }
+    record ImportReceipt(String source, String sha512, String archivedPath) {}
     record Baseline(String sha512, String targetSha512, boolean retained, boolean optional) {
         Baseline(String sha512, String targetSha512, boolean retained) { this(sha512, targetSha512, retained, false); }
     }

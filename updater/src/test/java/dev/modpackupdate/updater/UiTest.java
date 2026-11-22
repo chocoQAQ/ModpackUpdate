@@ -21,6 +21,28 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class UiTest {
+    @Test void localPackagePickerUsesTheChosenFile() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        var ui = new UpdateUi();
+        var executor = Executors.newSingleThreadExecutor();
+        Path first = Path.of("MyPack-1.2.0.mrpack");
+        Path second = Path.of("MyPack-1.3.0-offline.mrpack");
+        try {
+            var result = executor.submit(() -> ui.chooseLocal(List.of(first, second)));
+            Window dialog = awaitDialog("选择本地更新包");
+            SwingUtilities.invokeAndWait(() -> {
+                find(dialog, JComboBox.class).get(0).setSelectedIndex(1);
+                capture(dialog, "local-package-picker.png");
+                click(dialog, "检查所选更新包");
+            });
+            assertEquals(second, result.get(5, TimeUnit.SECONDS));
+        } finally {
+            ui.close();
+            SwingUtilities.invokeAndWait(() -> { for (Window window : Window.getWindows()) window.dispose(); });
+            executor.shutdownNow();
+        }
+    }
+
     @Test void fallbackCheckCanBeSkippedWithoutAnInstallationDialog() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
