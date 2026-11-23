@@ -117,12 +117,11 @@ final class UpdateUi {
             String announcement = release.announcement();
             content.add(scroll(text(announcement == null || announcement.isBlank() ? "暂无更新说明。" : announcement), 640, 190));
             content.add(Box.createVerticalStrut(16));
-            content.add(note("更新时会退出游戏，完成后请重新启动。"));
             if (uncertain) {
                 content.add(Box.createVerticalStrut(12));
                 content.add(note("缺少可比较的发布编号，无法确认新旧顺序；此次安装可能降级，请核对版本与来源。"));
             }
-            return dialog(null, "发现更新", content, "更新并退出游戏", "跳过并继续游戏", 720);
+            return dialog(null, "发现更新", content, "更新", "取消", 720);
         });
     }
 
@@ -141,7 +140,7 @@ final class UpdateUi {
                 if (checked[i]) initiallySelected++;
             }
             AbstractTableModel model = new AbstractTableModel() {
-                final String[] columns = {"采用新版操作", "文件", "操作 / 原因"};
+                final String[] columns = {"采用", "文件", "操作 / 原因"};
                 public int getRowCount() { return conflicts.size(); }
                 public int getColumnCount() { return columns.length; }
                 public String getColumnName(int column) { return columns[column]; }
@@ -161,7 +160,7 @@ final class UpdateUi {
                 }
             };
             JPanel content = stack();
-            content.add(heading("安装确认", "默认采用云端文件；采用新版模组时，一并禁用其他同 ID 本地 JAR。"));
+            content.add(heading("发现文件冲突", "默认采用云端文件；采用新版模组时，一并禁用其他同 ID 本地 JAR。"));
             content.add(Box.createVerticalStrut(22));
             JPanel summary = new JPanel(new GridLayout(1, 3, 12, 0));
             summary.setOpaque(false);
@@ -220,15 +219,14 @@ final class UpdateUi {
                 content.add(Box.createVerticalStrut(10));
                 content.add(scroll(table, 740, 240));
                 content.add(Box.createVerticalStrut(10));
-                content.add(label("取消新版模组可保留旧版；同 ID 模组不能同时启用。可选新文件默认不选。", 12, MUTED, false));
             }
             content.add(Box.createVerticalStrut(18));
-            JCheckBox delete = new JCheckBox("删除旧模组（不备份）", config.deleteReplacedMods);
+            JCheckBox delete = new JCheckBox("删除旧文件", config.deleteReplacedMods);
             delete.setFont(BODY.deriveFont(13f));
             delete.setForeground(INK);
             delete.setOpaque(false);
             content.add(delete);
-            if (!dialog(progress, "安装确认", content, "开始安装", "取消更新", 840)) return null;
+            if (!dialog(progress, "发现文件冲突", content, "继续安装", "取消更新", 840)) return null;
             if (table.isEditing()) table.getCellEditor().stopCellEditing();
             List<Models.Change> selected = new ArrayList<>();
             for (Models.Change change : changes) {

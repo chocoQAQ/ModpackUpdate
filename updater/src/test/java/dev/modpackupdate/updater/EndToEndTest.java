@@ -234,14 +234,14 @@ class EndToEndTest {
             for (Component component : container.getComponents()) {
                 if (component instanceof JOptionPane pane) pane.setValue(JOptionPane.OK_OPTION);
                 else if (component instanceof javax.swing.JButton button && "关闭".equals(button.getText())) button.doClick();
-                else if (component instanceof javax.swing.JButton button && "更新并退出游戏".equals(button.getText()) && !Boolean.getBoolean("test.skip-local")) {
+                else if (component instanceof javax.swing.JButton button && "更新".equals(button.getText()) && !Boolean.getBoolean("test.skip-local")) {
                     try { Files.writeString(instance.resolve("manual-confirm"), "confirmed"); }
                     catch (Exception e) { throw new RuntimeException(e); }
                     button.doClick();
                 }
-                else if (component instanceof javax.swing.JButton button && "跳过并继续游戏".equals(button.getText()) && Boolean.getBoolean("test.skip-local")) button.doClick();
+                else if (component instanceof javax.swing.JButton button && ("取消".equals(button.getText()) || "跳过并继续游戏".equals(button.getText())) && Boolean.getBoolean("test.skip-local")) button.doClick();
                 else if (component instanceof javax.swing.JButton button && "检查所选更新包".equals(button.getText())) button.doClick();
-                else if (component instanceof javax.swing.JButton button && "开始安装".equals(button.getText())) button.doClick();
+                else if (component instanceof javax.swing.JButton button && "继续安装".equals(button.getText())) button.doClick();
                 else if (repair && component instanceof javax.swing.JButton button && "全选".equals(button.getText())) button.doClick();
                 else if (component instanceof Container child) dismiss(child);
             }

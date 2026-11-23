@@ -70,7 +70,7 @@ class UiTest {
                     "更新内容\n\n• 更新部分模组\n• 优化启动速度\n• 修复配置冲突", null, null, null);
             var confirmation = executor.submit(() -> ui.confirm(installed, release, true));
             Window confirm = awaitDialog("发现更新");
-            SwingUtilities.invokeAndWait(() -> { capture(confirm, "confirmation.png"); click(confirm, "跳过并继续游戏"); });
+            SwingUtilities.invokeAndWait(() -> { capture(confirm, "confirmation.png"); click(confirm, "取消"); });
             assertFalse(confirmation.get(5, TimeUnit.SECONDS));
             ui.progress(UpdateUi.Stage.DOWNLOAD, "正在下载 · mods/example-adventure-1.5.0.jar", 3, 8);
             SwingUtilities.invokeAndWait(() -> {
@@ -162,7 +162,7 @@ class UiTest {
                     graphics.dispose();
                     ImageIO.write(image, "png", output.toFile());
                 } catch (Exception e) { throw new RuntimeException(e); }
-                click(dialog[0], "开始安装");
+                click(dialog[0], "继续安装");
             });
             UpdateUi.Selection selection = result.get(5, TimeUnit.SECONDS);
             assertEquals(List.of(conflict), selection.changes());
